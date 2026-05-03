@@ -368,7 +368,7 @@ if (file.exists(rds_h1)) {
   # log(metric) ~ log(DBH) + H1_category — tests whether infestation history
   # shifts the allometric intercept after controlling for tree size.
   # Slenderness and CBH: log_dbh omitted (DBH is algebraically in the ratio).
-  message("Fitting H1 models from scratch — this takes several hours...")
+  message("Fitting H1 models from scratch...")
   m_h1 <- list(
     depth   = brm(log_depth   ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
                   data = dat_h1, family = student(), seed = 42,
@@ -941,7 +941,12 @@ h2_ht_pval <- brm_pval(m_h2_lmm$height, "gained")
 
 fig_h2_ht <- dat_h2 |>
   filter(as.character(species) %in% top6_h2_sp) |>
-  mutate(species = factor(as.character(species), levels = top6_h2_sp)) |>
+mutate(
+  H2_category = factor(
+    H2_category,
+    levels = c("remained uninfested", "gained infestation")
+  ),
+  species = factor(as.character(species), levels = top6_h2_sp))|>
   ggplot(aes(H2_category, height, colour = H2_category, fill = H2_category)) +
     geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
     geom_boxplot(width = 0.18, outlier.shape = NA,
@@ -953,9 +958,13 @@ fig_h2_ht <- dat_h2 |>
     labs(x = "Infestation outcome (2019–2025)",
          y = "Tree height — TLS 2019 (m)") +
     theme_thesis +
-    theme(legend.position = "none",
-          axis.text.x     = element_text(angle = 20, hjust = 1),
-          strip.text       = element_text(face = "italic"))
+theme(
+  legend.position = "none",
+  axis.text.x     = element_text(angle = 20, hjust = 1),
+  strip.text      = element_text(face = "italic"),
+  plot.margin     = margin(6, 8, 6, 20)   # increase left margin (last value)
+) +
+coord_cartesian(clip = "off")
 
 fig_h2_ht
 save_fig(fig_h2_ht, "H2_height_by_outcome_top6sp.png", width = 16, height = 10)
@@ -987,6 +996,14 @@ cat("Species represented:", n_distinct(dat_h2_2011$species), "\n\n")
 # If the .rds was fitted before factor levels were corrected, delete it and refit:
 #   file.remove(file.path(model_dir, "m_h2_2011_height.rds"))
 rds_h2_2011 <- file.path(model_dir, "m_h2_2011_height.rds")
+
+
+dat_h2_2011$h2_2011_category <- factor(dat_h2_2011$h2_2011_category)
+
+dat_h2_2011$h2_2011_category <- relevel(
+  dat_h2_2011$h2_2011_category,
+  ref = "remained uninfested"
+)
 
 if (file.exists(rds_h2_2011)) {
   m_h2_2011_ht <- readRDS(rds_h2_2011)
@@ -1049,16 +1066,16 @@ fig_h2_ht_2011 <- dat_h2_2011 |>
     theme(
       legend.position = "none",
       axis.text.x     = element_text(angle = 20, hjust = 1),
-      strip.text      = element_text(face = "italic")
-    )
+      strip.text      = element_text(face = "italic"),
+      plot.margin     = margin(6, 8, 6, 25)   # increase left margin (last value)
+    ) +
+    coord_cartesian(clip = "off")
 
 fig_h2_ht_2011
 save_fig(fig_h2_ht_2011, "H2_height_2011_by_outcome_top6sp.png", width = 16, height = 10)
 
 
 ```
-
-
 
 
 
