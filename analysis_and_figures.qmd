@@ -40,6 +40,7 @@ library(nlme)        # asymptotic height (Michaelis-Menten) models
 
 # Table formatting
 library(knitr)       # kable() for inline result tables
+library(writexl)     # write_xlsx() for Excel appendix tables
 
 # ── Project paths (adjust if project is moved) ────────────────────────────────
 data_dir   <- "data"          # cleaned CSVs from save_final_dfs.R
@@ -280,6 +281,10 @@ dat_h2_2011 <- read_csv(file.path(data_dir, "dat_h2_2011.csv"),
                                                "gained infestation")),
          species  = factor(species),
          sbpltnm  = factor(sbpltnm))
+
+
+fieldwork_2025 <- read_csv(file.path(data_dir, "fieldwork_2025.csv"),
+                         show_col_types = FALSE)
 
 # ── H2b: climbing mode × crown architecture ───────────────────────────────────
 # Fieldwork (2025) records joined with TLS crown metrics.
@@ -943,9 +948,6 @@ fig_h2_ht <- dat_h2 |>
                  alpha = 0.50, linewidth = 0.6, colour = "grey20") +
     geom_jitter(width = 0.12, height = 0, alpha = 0.50, size = 1.2) +
     facet_wrap(~ species, scales = "free_y", ncol = 3) +
-    annotate("text", x = 1.5, y = Inf,
-             label = p_label(h2_ht_pval), parse = TRUE,
-             hjust = 0.5, vjust = 1.5, size = 3.0, colour = "grey20") +
     scale_colour_manual(values = pal_h2) +
     scale_fill_manual(values   = pal_h2) +
     labs(x = "Infestation outcome (2019–2025)",
@@ -958,7 +960,11 @@ fig_h2_ht <- dat_h2 |>
 fig_h2_ht
 save_fig(fig_h2_ht, "H2_height_by_outcome_top6sp.png", width = 16, height = 10)
 
+
+
 ```
+
+
 
 ```{r}
 #| label: h2-height-2011
@@ -976,32 +982,43 @@ cat("2011 height dataset — n by outcome:\n")
 print(count(dat_h2_2011, h2_2011_category))
 cat("Species represented:", n_distinct(dat_h2_2011$species), "\n\n")
 
-# Top 6 species for fig_h2_ht_2011
-top6_2011 <- dat_h2_2011 |>
-  count(species) |>
-  slice_max(n, n = 6) |>
-  pull(species) |> as.character()
-
-# Pooled Bayesian LMM for annotation (fits quickly — no random slopes)
+# Reference category = "remained uninfested" (first factor level, set in load-data).
+# Coefficient shown is "gained infestation" relative to "remained uninfested".
+# If the .rds was fitted before factor levels were corrected, delete it and refit:
+#   file.remove(file.path(model_dir, "m_h2_2011_height.rds"))
 rds_h2_2011 <- file.path(model_dir, "m_h2_2011_height.rds")
 
 if (file.exists(rds_h2_2011)) {
   m_h2_2011_ht <- readRDS(rds_h2_2011)
 } else {
+  # "remained uninfested" is the reference; coefficient = effect of gaining infestation.
+  # (1|species) only — sbpltnm dropped because most trees lack subplot records here.
   m_h2_2011_ht <- brm(
-    log_height_2011 ~ log_dbh_2011 + h2_2011_category + (1|species) + (1|sbpltnm),
-    data    = dat_h2_2011,
+    log_height_2011 ~ log_dbh_2011 + h2_2011_category + (1|species),
+    data    = dat_h2_2011,      # 414 rows, 85 species
     family  = student(),
     seed    = 42, chains = 4, cores = 2, iter = 4000, warmup = 1000,
     control = brm_ctrl, silent = 2)
   saveRDS(m_h2_2011_ht, rds_h2_2011)
 }
 
-h2_2011_pval <- brm_pval(m_h2_2011_ht, "gained")
-cat("2011 height model — gained infestation effect:\n")
-pct_table(m_h2_2011_ht) |> kable() |> print()
-cat("\n")
+
+# Top 6 species for fig_h2_ht_2011
+top6_2011 <- dat_h2_2011 |>
+  count(species) |>
+  slice_max(n, n = 6) |>
+  pull(species) |> as.character()
+
+
+# % effects: gained infestation relative to remained uninfested (reference)
+cat("2011 height model — % effects (gained vs remained uninfested):\n\n")
+pct_table(m_h2_2011_ht) |>
+  kable(caption = "2011 height model: % effects vs remained uninfested (95% CrI)") |>
+  print()
+
+cat("\n── Headline % effects (copy-paste for thesis) ──\n")
 report_pct(m_h2_2011_ht) |> paste(collapse = "\n") |> cat()
+
 
 # Figure: same style as the TLS 2019 height figure
 fig_h2_ht_2011 <- dat_h2_2011 |>
@@ -1024,9 +1041,6 @@ fig_h2_ht_2011 <- dat_h2_2011 |>
                  alpha = 0.50, linewidth = 0.6, colour = "grey20") +
     geom_jitter(width = 0.12, height = 0, alpha = 0.50, size = 1.2) +
     facet_wrap(~ species, scales = "free_y", ncol = 3) +
-    annotate("text", x = 1.5, y = Inf,
-             label = p_label(h2_2011_pval), parse = TRUE,
-             hjust = 0.5, vjust = 1.5, size = 3.0, colour = "grey20") +
     scale_colour_manual(values = pal_h2) +
     scale_fill_manual(values   = pal_h2) +
     labs(x = "Infestation outcome (2011–2019)",
@@ -1045,7 +1059,8 @@ save_fig(fig_h2_ht_2011, "H2_height_2011_by_outcome_top6sp.png", width = 16, hei
 ```
 
 
----
+
+
 
 # H2b: Infestation Pathway and Climbing Mode
 
@@ -1104,6 +1119,91 @@ fig_pathway_sp <- ggplot(inf_type_sp, aes(species, prop, fill = infestation_type
 fig_pathway_sp
 save_fig(fig_pathway_sp, "H2b_infestation_type_by_species.png", width = 14, height = 7)
 ```
+
+
+```{r}
+#| label: gained-infestation-pathway-summary
+
+# ── Who gained lianas, and how did they get them? ────────────────────────────
+# Three overlapping datasets, each with a different time window and sample.
+# All pathway data comes from 2025 fieldwork (modes_clean / fieldwork_2025).
+
+# ── 1. TLS trees: uninfested 2019, gained by 2025 (dat_h2) ──────────────────
+cat("═══ Dataset 1: TLS trees (2019 → 2025) ═══\n")
+cat("Base: dat_h2 — trees uninfested in 2019 with TLS crown metrics\n\n")
+
+gained_pathway_tls <- modes_clean |>
+  distinct(tag6, infestation_type) |>
+  inner_join(select(dat_h2, tag6, H2_category), by = "tag6") |>
+  filter(H2_category == "gained infestation", !is.na(infestation_type))
+
+cat("n trees with both TLS H2 outcome AND pathway data:", 
+    n_distinct(gained_pathway_tls$tag6), "\n\n")
+
+gained_pathway_tls |>
+  count(infestation_type, sort = TRUE) |>
+  mutate(prop = round(n / sum(n) * 100, 1)) |>
+  kable(caption = "Pathway — TLS gained trees (2019–2025)") |> print()
+
+# ── 2. 2011 height trees: uninfested 2011, gained by 2025 (dat_h2_2011) ─────
+cat("\n═══ Dataset 2: 2011 height trees (2011 → 2025, dendrometer outcome) ═══\n")
+cat("Base: dat_h2_2011 — trees with 2011 field height, outcome from dendrometer\n\n")
+
+gained_pathway_2011 <- modes_clean |>
+  distinct(tag6, infestation_type) |>
+  inner_join(
+    dat_h2_2011 |> filter(h2_2011_category == "gained infestation") |>
+      select(tag6),
+    by = "tag6") |>
+  filter(!is.na(infestation_type))
+
+cat("n trees with both 2011 height outcome AND pathway data:",
+    n_distinct(gained_pathway_2011$tag6), "\n\n")
+
+gained_pathway_2011 |>
+  count(infestation_type, sort = TRUE) |>
+  mutate(prop = round(n / sum(n) * 100, 1)) |>
+  kable(caption = "Pathway — 2011 height gained trees (2011–2025, dendrometer outcome)") |>
+  print()
+
+# ── 3. 2011 height × fieldwork: broadest sample ──────────────────────────────
+cat("\n═══ Dataset 3: 2011 height × fieldwork (2011 → 2025, fieldwork outcome) ═══\n")
+cat("Base: dat_h2_2011 joined to fieldwork — no dendrometer or TLS required\n\n")
+
+gained_pathway_fw <- fieldwork_2025 |>
+  filter(priority == "completed",
+         str_to_title(str_squish(infestation_type)) %in%
+           c("Direct","Lateral","Both")) |>
+  mutate(infestation_type = str_to_title(str_squish(infestation_type))) |>
+  inner_join(select(dat_h2_2011, tag6), by = "tag6") |>
+  distinct(tag6, infestation_type)
+
+cat("n trees with 2011 height AND fieldwork gained status:",
+    n_distinct(gained_pathway_fw$tag6), "\n\n")
+
+gained_pathway_fw |>
+  count(infestation_type, sort = TRUE) |>
+  mutate(prop = round(n / sum(n) * 100, 1)) |>
+  kable(caption = "Pathway — 2011 height × fieldwork gained trees (2011–2025)") |>
+  print()
+
+# ── Combined summary across all three ────────────────────────────────────────
+cat("\n═══ Summary across datasets ═══\n")
+bind_rows(
+  gained_pathway_tls  |> count(infestation_type) |> mutate(dataset = "TLS 2019→2025"),
+  gained_pathway_2011 |> count(infestation_type) |> mutate(dataset = "2011 height, dendro outcome"),
+  gained_pathway_fw   |> count(infestation_type) |> mutate(dataset = "2011 height, fieldwork outcome")
+) |>
+  group_by(dataset) |>
+  mutate(prop = round(n / sum(n) * 100, 1)) |>
+  ungroup() |>
+  select(dataset, infestation_type, n, prop) |>
+  arrange(dataset, desc(n)) |>
+  kable(caption = "Infestation pathway in gained trees — comparison across datasets") |>
+  print()
+
+```
+
 
 ## §8 Active vs Passive climbing class × crown architecture
 
@@ -1177,6 +1277,8 @@ fig_ap <- plot_grid(
 fig_ap
 save_fig(fig_ap, "H2b_active_vs_passive_crown.png", width = 16, height = 9)
 ```
+
+
 
 ## §8.3 Species × climbing mode bar charts
 
@@ -1476,6 +1578,202 @@ fig_pai_sp
 save_fig(fig_pai_sp, "APPENDIX_H1_PAI_top12_species.png", width = 18, height = 20)
 ```
 
+
+## A6: Summary tables for thesis appendix {#sec-appendix-tables}
+
+```{r}
+#| label: appendix-tables
+#| message: false
+
+# ── Helper: fixed-effects table with % CIs for brms models ───────────────────
+# Produces one row per parameter per model, with back-transformed % changes.
+make_fixed_table <- function(mod, label) {
+  fixef(mod) |>
+    as_tibble(rownames = "term") |>
+    mutate(
+      Model      = label,
+      sig        = sign(Q2.5) == sign(Q97.5),
+      pct_effect = round((exp(Estimate) - 1) * 100, 2),
+      pct_low    = round((exp(Q2.5)    - 1) * 100, 2),
+      pct_high   = round((exp(Q97.5)   - 1) * 100, 2),
+      Estimate   = round(Estimate,  4),
+      Est.Error  = round(Est.Error, 4),
+      Q2.5       = round(Q2.5,      4),
+      Q97.5      = round(Q97.5,     4)
+    ) |>
+    select(Model, term, Estimate, Est.Error, Q2.5, Q97.5,
+           sig, pct_effect, pct_low, pct_high)
+}
+
+# ── Sample sizes ──────────────────────────────────────────────────────────────
+tbl_samples <- tribble(
+  ~Analysis,          ~Dataset,           ~`n trees`, ~`n species`, ~`n subplots`,
+  "H1 structural",    "dat_h1",           nrow(dat_h1),
+    n_distinct(dat_h1$species), n_distinct(dat_h1$sbpltnm),
+  "H1 PAI",           "clean_pai",        nrow(clean_pai),
+    n_distinct(clean_pai$Species), n_distinct(clean_pai$sbpltnm),
+  "H2 TLS (2019)",    "dat_h2",           nrow(dat_h2),
+    n_distinct(dat_h2$species), n_distinct(dat_h2$sbpltnm),
+  "H2 height (2011)", "dat_h2_2011",      nrow(dat_h2_2011),
+    n_distinct(dat_h2_2011$species), NA_integer_,
+  "H2b climbing",     "dat_mode",         nrow(dat_mode),
+    n_distinct(dat_mode$species), NA_integer_
+)
+
+cat("===== SAMPLE SIZES =====\n")
+tbl_samples |> kable(caption = "Sample sizes per analysis") |> print()
+write_csv(tbl_samples, file.path(tables_dir, "sample_sizes.csv"))
+
+# ── H1 fixed effects (all 6 metrics) ─────────────────────────────────────────
+metric_labels_full <- c(
+  height  = "Tree height",
+  depth   = "Crown depth",
+  area    = "Crown projected area",
+  vol     = "Crown volume",
+  slender = "Slenderness (height/DBH)",
+  cbh     = "Crown base height ratio"
+)
+
+tbl_h1_fixed <- map_dfr(names(metric_labels_full),
+  ~ make_fixed_table(m_h1[[.x]],
+                     paste0("H1 — ", metric_labels_full[.x])))
+
+cat("\n===== H1 FIXED EFFECTS =====\n")
+tbl_h1_fixed |> kable(caption = "H1 fixed effects — all metrics (reference: Never infested)") |> print()
+write_csv(tbl_h1_fixed, file.path(tables_dir, "H1_fixed_effects.csv"))
+
+# ── H2 fixed effects (all 6 metrics) ─────────────────────────────────────────
+tbl_h2_fixed <- map_dfr(names(metric_labels_full),
+  ~ make_fixed_table(m_h2_lmm[[.x]],
+                     paste0("H2 TLS — ", metric_labels_full[.x])))
+
+cat("\n===== H2 FIXED EFFECTS =====\n")
+tbl_h2_fixed |> kable(caption = "H2 fixed effects — all metrics (reference: remained uninfested)") |> print()
+write_csv(tbl_h2_fixed, file.path(tables_dir, "H2_fixed_effects.csv"))
+
+# ── PAI model fixed effects ───────────────────────────────────────────────────
+tbl_pai_fixed <- make_fixed_table(m_pai_main, "H1 PAI — log(PAI_tree_only)")
+
+cat("\n===== PAI FIXED EFFECTS =====\n")
+tbl_pai_fixed |> kable(caption = "PAI model fixed effects (reference: None)") |> print()
+write_csv(tbl_pai_fixed, file.path(tables_dir, "PAI_fixed_effects.csv"))
+
+# ── 2011 height model fixed effects ──────────────────────────────────────────
+tbl_h2_2011_fixed <- make_fixed_table(m_h2_2011_ht,
+                                       "H2 height 2011 — log(height_2011)")
+
+cat("\n===== 2011 HEIGHT MODEL FIXED EFFECTS =====\n")
+tbl_h2_2011_fixed |> kable(caption = "2011 height model fixed effects (reference: remained uninfested)") |> print()
+write_csv(tbl_h2_2011_fixed, file.path(tables_dir, "H2_2011_height_fixed_effects.csv"))
+
+# ── H2b OLS model p-values ────────────────────────────────────────────────────
+tbl_h2b <- tibble(
+  Metric                  = metric_labels_full[names(pvals_type)],
+  `p (pathway type)`      = round(pvals_type[names(pvals_type)], 3),
+  `p (Active vs Passive)` = round(pvals_ap[names(pvals_ap)], 3)
+)
+write_csv(tbl_h2b, file.path(tables_dir, "H2b_OLS_pvalues.csv"))
+
+# ── Model specification table (Appendix S1) ───────────────────────────────────
+tbl_model_spec <- tribble(
+  ~Hypothesis, ~`Response variable`,    ~`Model type`,
+  ~`Fixed effects`, ~`Random effects`,  ~`n obs`, ~`n species`,
+
+  "H1", "log(Tree height)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1$height$data), n_distinct(dat_h1$species),
+
+  "H1", "log(Crown projected area)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1$area$data), n_distinct(dat_h1$species),
+
+  "H1", "log(Crown volume)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1$vol$data), n_distinct(dat_h1$species),
+
+  "H1", "log(Crown depth)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1$depth$data), n_distinct(dat_h1$species),
+
+  "H1", "log(Slenderness)",
+  "brm LMM (Student-t)",
+  "H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1$slender$data), n_distinct(dat_h1$species),
+
+  "H1", "log(Crown base height ratio)",
+  "brm LMM (Student-t)",
+  "H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1$cbh$data), n_distinct(dat_h1$species),
+
+  "H1 PAI", "log(PAI tree only)",
+  "brm LMM (Student-t)",
+  "infest_cat + log(DBH)", "(1|Species) + (1|subplot)",
+  nrow(m_pai_main$data), n_distinct(clean_pai$Species),
+
+  "H2 TLS", "log(Tree height)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_lmm$height$data), n_distinct(dat_h2$species),
+
+  "H2 TLS", "log(Crown projected area)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_lmm$area$data), n_distinct(dat_h2$species),
+
+  "H2 TLS", "log(Crown volume)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_lmm$vol$data), n_distinct(dat_h2$species),
+
+  "H2 TLS", "log(Crown depth)",
+  "brm LMM (Student-t)",
+  "log(DBH) + H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_lmm$depth$data), n_distinct(dat_h2$species),
+
+  "H2 TLS", "log(Slenderness)",
+  "brm LMM (Student-t)",
+  "H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_lmm$slender$data), n_distinct(dat_h2$species),
+
+  "H2 TLS", "log(Crown base height ratio)",
+  "brm LMM (Student-t)",
+  "H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_lmm$cbh$data), n_distinct(dat_h2$species),
+
+  "H2 height", "log(Height 2011)",
+  "brm LMM (Student-t)",
+  "log(DBH 2011) + h2_2011_category", "(1|species)",
+  nrow(m_h2_2011_ht$data), n_distinct(dat_h2_2011$species)
+)
+
+cat("\n===== MODEL SPECIFICATION TABLE =====\n")
+tbl_model_spec |> kable(caption = "Appendix S1: Full model specifications") |> print()
+write_csv(tbl_model_spec, file.path(tables_dir, "model_specifications.csv"))
+
+# ── Write all tables to a single Excel workbook ───────────────────────────────
+write_xlsx(
+  list(
+    "Sample_sizes"          = tbl_samples,
+    "H1_fixed_effects"      = tbl_h1_fixed,
+    "H2_TLS_fixed_effects"  = tbl_h2_fixed,
+    "PAI_fixed_effects"     = tbl_pai_fixed,
+    "H2_2011_height"        = tbl_h2_2011_fixed,
+    "H2b_OLS_pvalues"       = tbl_h2b,
+    "Model_specifications"  = tbl_model_spec,
+    "Height_model_comparison" = tbl_height_compare
+  ),
+  path = file.path(tables_dir, "all_model_results.xlsx")
+)
+
+cat("\n✓ All tables saved to:", tables_dir, "\n")
+cat("  Files: sample_sizes.csv, H1/H2/PAI/H2_2011 fixed effects,",
+    "H2b_OLS_pvalues, model_specifications, all_model_results.xlsx\n")
+```
+
 ---
 
 ```{r}
@@ -1483,3 +1781,4 @@ save_fig(fig_pai_sp, "APPENDIX_H1_PAI_top12_species.png", width = 18, height = 2
 #| code-fold: false
 sessionInfo()
 ```
+

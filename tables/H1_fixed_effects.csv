@@ -1,0 +1,23 @@
+Model,term,Estimate,Est.Error,Q2.5,Q97.5,sig,pct_effect,pct_low,pct_high
+H1 — Tree height,Intercept,1.7305,0.0974,1.5375,1.9195,TRUE,464.32,365.29,581.76
+H1 — Tree height,log_dbh,0.423,0.0247,0.3748,0.4721,TRUE,52.66,45.47,60.34
+H1 — Tree height,H1_categoryLostlianas,-0.0509,0.0201,-0.0904,-0.0113,TRUE,-4.97,-8.64,-1.13
+H1 — Tree height,H1_categoryPersistentlyinfested,-0.1167,0.0216,-0.1595,-0.0751,TRUE,-11.02,-14.74,-7.23
+H1 — Crown depth,Intercept,1.3134,0.189,0.9394,1.6885,TRUE,271.88,155.85,441.12
+H1 — Crown depth,log_dbh,0.3637,0.0481,0.2687,0.4585,TRUE,43.86,30.83,58.18
+H1 — Crown depth,H1_categoryLostlianas,-8e-4,0.0453,-0.089,0.0884,FALSE,-0.08,-8.52,9.25
+H1 — Crown depth,H1_categoryPersistentlyinfested,-0.0566,0.0464,-0.1477,0.0354,FALSE,-5.5,-13.73,3.6
+H1 — Crown projected area,Intercept,-1.2881,0.351,-1.996,-0.6033,TRUE,-72.42,-86.41,-45.3
+H1 — Crown projected area,log_dbh,1.531,0.0895,1.3581,1.7106,TRUE,362.3,288.87,453.21
+H1 — Crown projected area,H1_categoryLostlianas,-0.1053,0.0716,-0.2468,0.0351,FALSE,-9.99,-21.87,3.57
+H1 — Crown projected area,H1_categoryPersistentlyinfested,-0.2528,0.0771,-0.4068,-0.1058,TRUE,-22.34,-33.42,-10.04
+H1 — Crown volume,Intercept,-0.7345,0.5034,-1.7267,0.2405,FALSE,-52.03,-82.21,27.19
+H1 — Crown volume,log_dbh,1.7609,0.1284,1.5144,2.0124,TRUE,481.79,354.68,648.13
+H1 — Crown volume,H1_categoryLostlianas,-0.0758,0.1007,-0.273,0.1198,FALSE,-7.3,-23.89,12.72
+H1 — Crown volume,H1_categoryPersistentlyinfested,-0.2993,0.1069,-0.5145,-0.0949,TRUE,-25.87,-40.22,-9.06
+H1 — Slenderness (height/DBH),Intercept,-0.4866,0.041,-0.5674,-0.4069,TRUE,-38.53,-43.3,-33.43
+H1 — Slenderness (height/DBH),H1_categoryLostlianas,-0.0348,0.0374,-0.1084,0.0374,FALSE,-3.42,-10.27,3.81
+H1 — Slenderness (height/DBH),H1_categoryPersistentlyinfested,-0.0729,0.0385,-0.148,0.002,FALSE,-7.03,-13.75,0.2
+H1 — Crown base height ratio,Intercept,-0.8023,0.054,-0.9104,-0.6987,TRUE,-55.17,-59.76,-50.28
+H1 — Crown base height ratio,H1_categoryLostlianas,-0.0417,0.0572,-0.1538,0.0697,FALSE,-4.09,-14.26,7.21
+H1 — Crown base height ratio,H1_categoryPersistentlyinfested,-0.0748,0.0613,-0.1966,0.0431,FALSE,-7.2,-17.85,4.41

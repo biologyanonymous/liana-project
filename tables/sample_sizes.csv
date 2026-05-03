@@ -1,0 +1,6 @@
+Analysis,Dataset,n trees,n species,n subplots
+H1 structural,dat_h1,251,67,24
+H1 PAI,clean_pai,575,91,24
+H2 TLS (2019),dat_h2,181,61,24
+H2 height (2011),dat_h2_2011,414,85,NA
+H2b climbing,dat_mode,49,6,NA
