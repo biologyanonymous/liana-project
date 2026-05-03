@@ -1,0 +1,1485 @@
+---
+title: "Tree Architectural Feedbacks with Liana Canopy Infestation"
+subtitle: "BCI 50-ha Forest Dynamics Plot | MBiol 2026"
+format:
+  html:
+    code-fold: true          # all code blocks collapsible; click to expand
+    code-tools: true         # adds a toolbar to copy/show all code
+    toc: true
+    toc-depth: 3
+    toc-title: "Contents"
+    theme: cosmo
+    embed-resources: true    # single portable HTML file
+    fig-width: 7
+    fig-height: 5
+execute:
+  warning: false
+  message: false
+  echo: true                 # show code by default (overridden per-chunk)
+---
+
+```{r}
+#| label: setup
+#| code-fold: false          # always show: the only chunk readers MUST see
+#| echo: true
+
+# ── Libraries ─────────────────────────────────────────────────────────────────
+# Data wrangling
+library(readr);      library(dplyr);    library(tidyr);   library(tibble)
+library(stringr);    library(forcats);  library(purrr);   library(glue)
+
+# Plotting
+library(ggplot2);    library(scales);   library(cowplot); library(ggsignif)
+library(ggrepel)
+
+# Mixed models
+library(lme4);       library(lmerTest); library(emmeans)
+library(broom.mixed);library(broom)
+library(brms)        # Bayesian LMM — student-t family; robust to heavy tails
+library(nlme)        # asymptotic height (Michaelis-Menten) models
+
+# Table formatting
+library(knitr)       # kable() for inline result tables
+
+# ── Project paths (adjust if project is moved) ────────────────────────────────
+data_dir   <- "data"          # cleaned CSVs from save_final_dfs.R
+model_dir  <- "models"        # pre-fitted brms .rds files
+figs_dir   <- "figures"
+tables_dir <- "tables"
+
+for (d in c(data_dir, model_dir, figs_dir, tables_dir,
+            file.path(figs_dir, "diagnostics"),
+            file.path(figs_dir, "random_effects")))
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+
+# ── Colour palette (Okabe-Ito: colourblind-safe) ──────────────────────────────
+okabe <- c(orange = "#E69F00", sky_blue = "#56B4E9", green   = "#009E73",
+           yellow = "#F0E442", blue     = "#0072B2", vermillion = "#D55E00",
+           purple = "#CC79A7", black    = "#000000")
+
+# H1 infestation history (3 groups)
+pal_h1 <- c("Never infested"        = unname(okabe["blue"]),
+            "Lost lianas"           = unname(okabe["orange"]),
+            "Persistently infested" = unname(okabe["vermillion"]))
+
+# H2 infestation outcome (2 groups)
+pal_h2 <- c("remained uninfested" = unname(okabe["blue"]),
+            "gained infestation"  = unname(okabe["orange"]))
+
+# PAI components
+pal_pai <- c("Tree Only"    = unname(okabe["sky_blue"]),
+             "Tree + Liana" = unname(okabe["vermillion"]))
+
+# Infestation pathway
+pal_mode <- c(Direct  = unname(okabe["orange"]),
+              Lateral = unname(okabe["blue"]),
+              Both    = unname(okabe["purple"]))
+
+# Climbing class
+pal_ap <- c(Active  = unname(okabe["blue"]),
+            Passive = unname(okabe["orange"]))
+
+# Random-effect direction
+pal_re <- c(Higher = unname(okabe["blue"]),
+            Lower  = unname(okabe["vermillion"]),
+            NS     = "grey60")
+
+# ── Shared ggplot theme ────────────────────────────────────────────────────────
+theme_thesis <- theme_classic(base_size = 11, base_family = "sans") +
+  theme(axis.title   = element_text(size = 11),
+        axis.text    = element_text(size = 10),
+        strip.text   = element_text(size = 10, face = "italic"),
+        strip.background = element_blank(),
+        legend.text  = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        plot.margin  = margin(6, 8, 6, 8),
+        panel.grid   = element_blank())
+
+# ── Helper functions ───────────────────────────────────────────────────────────
+
+# Italic p-value string for annotate(parse = TRUE)
+p_label <- function(p) {
+  if      (p < 0.001) "italic(p) < 0.001"
+  else if (p < 0.01)  sprintf("italic(p) == '%.3f'", p)
+  else                sprintf("italic(p) == '%.2f'",  p)
+}
+
+# Consistent ggsave wrapper
+save_fig <- function(plot, name, width = 16, height = 10, dpi = 300,
+                     dir = figs_dir) {
+  ggsave(file.path(dir, name), plot,
+         width = width, height = height, units = "cm", dpi = dpi, bg = "white")
+  invisible(plot)
+}
+
+# Bold panel letter (top-left corner of a ggplot)
+label_panel <- function(p, ltr)
+  p + annotate("text", x = -Inf, y = Inf, label = ltr,
+               hjust = -0.3, vjust = 1.4, size = 4, fontface = "bold")
+
+# Posterior direction probability → approximate two-sided p-value
+# Works for any brms model variable; cat_name is the group label string
+brm_pval <- function(mod, cat_name) {
+  clean <- gsub(" ", "", cat_name)
+  var   <- grep(clean, variables(mod), value = TRUE, fixed = TRUE)
+  if (!length(var)) return(NA_real_)
+  p <- mean(as.matrix(mod, variable = var[1]) < 0)
+  min(p, 1 - p) * 2
+}
+
+# Formatted % effect table from a brms fixef() matrix
+# Returns a kable-ready tibble with estimate, 95% CrI, and % change + CIs
+pct_table <- function(model, label = NULL) {
+  fixef(model) |>
+    as_tibble(rownames = "term") |>
+    filter(term != "Intercept") |>
+    mutate(
+      `Posterior mean` = round(Estimate, 3),
+      `95% CrI`        = glue("[{round(Q2.5,3)}, {round(Q97.5,3)}]"),
+      `% effect`       = round((exp(Estimate) - 1) * 100, 1),
+      `% CI`           = glue("[{round((exp(Q2.5)-1)*100,1)}, {round((exp(Q97.5)-1)*100,1)}]"),
+      Credible         = if_else(sign(Q2.5) == sign(Q97.5), "✓", "")
+    ) |>
+    select(term, `Posterior mean`, `95% CrI`, `% effect`, `% CI`, Credible)
+}
+
+# Random-effect CI plot (works for brms and lmer)
+plot_re_ci <- function(model, title, sp_eligible = NULL, group_name = "species") {
+  re_list <- ranef(model)
+  re_arr  <- re_list[[group_name]]
+  if (is.array(re_arr)) {
+    rd <- tibble(level    = rownames(re_arr),
+                 estimate = re_arr[, "Estimate", "Intercept"],
+                 lo       = re_arr[, "Q2.5",    "Intercept"],
+                 hi       = re_arr[, "Q97.5",   "Intercept"])
+  } else {
+    pv     <- attr(re_list, "postVar")
+    se_vals <- if (!is.null(pv) && group_name %in% names(pv))
+      sqrt(as.vector(pv[[group_name]][1, 1, ]))
+    else if (requireNamespace("arm", quietly = TRUE))
+      arm::se.ranef(re_list)[[group_name]][, 1]
+    else rep(NA_real_, nrow(re_arr))
+    rd <- tibble(level    = rownames(re_arr),
+                 estimate = re_arr[, 1],
+                 lo       = estimate - 1.96 * se_vals,
+                 hi       = estimate + 1.96 * se_vals)
+  }
+  rd <- rd |>
+    mutate(status = case_when(
+      !is.na(lo) & lo > 0 ~ "Higher",
+      !is.na(hi) & hi < 0 ~ "Lower",
+      TRUE ~ "NS"))
+  if (!is.null(sp_eligible)) rd <- filter(rd, level %in% sp_eligible)
+  ggplot(rd, aes(estimate, reorder(level, estimate), colour = status)) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60", linewidth = 0.6) +
+    geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.3, linewidth = 0.8) +
+    geom_point(size = 3) +
+    scale_colour_manual(values = pal_re) +
+    labs(title = title, x = "Random-effect estimate", y = NULL) +
+    theme_thesis +
+    theme(legend.position = "none", axis.text.y = element_text(face = "italic"),
+          plot.title = element_text(size = 11, face = "bold"))
+}
+
+# Model comparison table (with vs. without subplot RE) using lmer LRT
+compare_re <- function(formula_fixed, data, model_name) {
+  m_full    <- lmer(update(formula_fixed, . ~ . + (1|species) + (1|sbpltnm)),
+                    data = data, REML = FALSE)
+  m_nosubpl <- lmer(update(formula_fixed, . ~ . + (1|species)),
+                    data = data, REML = FALSE)
+  tibble(model     = model_name,
+         AIC_full  = AIC(m_full),
+         AIC_no_sb = AIC(m_nosubpl),
+         DAIC      = AIC(m_full) - AIC(m_nosubpl),
+         p_LRT     = anova(m_full, m_nosubpl)$`Pr(>Chisq)`[2])
+}
+
+# Significance flags from a brms fixef matrix (category columns only)
+# Returns a tibble with H1_category / H2_category and significant (TRUE/FALSE)
+get_sig_flags_h1 <- function(model) {
+  fe  <- fixef(model)
+  idx <- grep("H1_category", rownames(fe), value = TRUE)
+  orig <- c("Lost lianas", "Persistently infested")
+  matched <- map_chr(idx, function(nm) {
+    stub <- str_remove(nm, "H1_category")
+    hit  <- orig[gsub(" ", "", orig) == stub]
+    if (length(hit) == 1L) hit else stub
+  })
+  tibble(H1_category = matched,
+         significant  = sign(fe[idx, "Q2.5"]) == sign(fe[idx, "Q97.5"])) |>
+    bind_rows(tibble(H1_category = "Never infested", significant = TRUE))
+}
+
+get_sig_flags_h2 <- function(model) {
+  fe  <- fixef(model)
+  idx <- grep("H2_category", rownames(fe), value = TRUE)
+  matched <- map_chr(idx, function(nm) {
+    stub <- str_remove(nm, "H2_category")
+    orig <- "gained infestation"
+    hit  <- orig[gsub(" ", "", orig) == stub]
+    if (length(hit) == 1L) hit else stub
+  })
+  tibble(H2_category = matched,
+         significant  = sign(fe[idx, "Q2.5"]) == sign(fe[idx, "Q97.5"])) |>
+    bind_rows(tibble(H2_category = "remained uninfested", significant = TRUE))
+}
+
+cat("✓ Setup complete\n")
+```
+
+---
+
+# Data
+
+> **Loading in six CSVs ready for analysis** 
+> All log-transforms and derived columns (slenderness, cbh_ratio, etc.) are
+> already present. Factor levels are reset on load.
+
+```{r}
+#| label: load-data
+#| code-fold: false
+
+# ── H1: structural legacies (n = 251 trees) ───────────────────────────────────
+# Crown metrics (TLS 2019) merged with infestation history (2011–2019).
+# H1_category: Never infested / Lost lianas / Persistently infested
+dat_h1 <- read_csv(file.path(data_dir, "dat_h1.csv"), show_col_types = FALSE) |>
+  mutate(H1_category = factor(H1_category,
+                               levels = c("Never infested",
+                                          "Lost lianas",
+                                          "Persistently infested")),
+         species  = factor(species),
+         sbpltnm  = factor(sbpltnm))
+
+# ── H1: plant area index (n = 575 trees) ────────────────────────────────────
+# Voxel-based PAI (tree-only and combined) by liana load category.
+clean_pai <- read_csv(file.path(data_dir, "clean_pai.csv"), show_col_types = FALSE) |>
+  mutate(infest_cat = factor(infest_cat, levels = c("None", "Light", "Heavy")),
+         infest_bin = factor(infest_bin, levels = c("None", "Infested")),
+         Species    = factor(Species),
+         sbpltnm    = factor(sbpltnm))
+
+# ── H2: pre-infestation architecture as predictor (n = 181 trees) ─────────────
+# Trees uninfested in 2019: did they gain lianas by 2025?
+# H2_category: remained uninfested / gained infestation
+dat_h2 <- read_csv(file.path(data_dir, "dat_h2.csv"), show_col_types = FALSE) |>
+  mutate(H2_category = factor(H2_category,
+                               levels = c("remained uninfested",
+                                          "gained infestation")),
+         species  = factor(species),
+         sbpltnm  = factor(sbpltnm))
+
+# ── H2 exploratory: 2011 ground-measured heights (larger dataset) ─────────────
+# Trees uninfested in 2011, classified by whether they gained lianas by 2019.
+# Covers more trees than the TLS dataset (all dendrometer subplots, not just
+# the 24 scanned ones). Used to replicate the H2 height analysis over a longer
+# and earlier time window (2011–2019).
+dat_h2_2011 <- read_csv(file.path(data_dir, "dat_h2_2011.csv"),
+                         show_col_types = FALSE) |>
+  mutate(h2_2011_category = factor(h2_2011_category,
+                                    levels = c("remained uninfested",
+                                               "gained infestation")),
+         species  = factor(species),
+         sbpltnm  = factor(sbpltnm))
+
+# ── H2b: climbing mode × crown architecture ───────────────────────────────────
+# Fieldwork (2025) records joined with TLS crown metrics.
+# One row per tree; dominant_class = Active or Passive climbing.
+dat_mode <- read_csv(file.path(data_dir, "dat_mode.csv"), show_col_types = FALSE) |>
+  mutate(infestation_type = factor(infestation_type, levels = c("Direct","Lateral","Both")),
+         dominant_class   = factor(dominant_class,   levels = c("Active","Passive")),
+         species          = factor(species))
+
+dat_mode_ap <- filter(dat_mode, !is.na(dominant_class))   # subset with class data
+
+# ── §7: infestation pathway analysis ─────────────────────────────────────────
+# Pathway type (Direct/Lateral/Both) × H2 outcome; used for chi-square test.
+pathway_dat <- read_csv(file.path(data_dir, "pathway_dat.csv"), show_col_types = FALSE) |>
+  mutate(H2_category  = factor(H2_category),
+         inf_type_bin = factor(inf_type_bin),
+         infestation_type = factor(infestation_type, levels = c("Direct","Lateral","Both")))
+
+# ── §8.3: species × climbing mode bar charts ──────────────────────────────────
+# One row per tree × liana observation (can be >1 per tree).
+modes_clean <- read_csv(file.path(data_dir, "modes_clean.csv"), show_col_types = FALSE) |>
+  mutate(climb_class = factor(climb_class, levels = c("Active","Passive")))
+
+# Top 6 species used in pathway/mode figures (same 6 used in fieldwork)
+target_species <- c("Alseis blackiana","Gustavia superba","Heisteria concinna",
+                    "Prioria copaifera","Quararibea asterolepis","Trichilia tuberculata")
+
+# brms control settings (shared across all Bayesian models)
+brm_ctrl <- list(adapt_delta = 0.95)
+
+cat("Datasets loaded:\n")
+cat("  dat_h1:      ", nrow(dat_h1),    "trees,", n_distinct(dat_h1$species),   "species\n")
+cat("  clean_pai:   ", nrow(clean_pai), "trees,", n_distinct(clean_pai$Species),"species\n")
+cat("  dat_h2:      ", nrow(dat_h2),    "trees,", n_distinct(dat_h2$species),   "species\n")
+cat("  dat_mode:    ", nrow(dat_mode),  "trees\n")
+cat("  pathway_dat: ", nrow(pathway_dat), "records\n")
+cat("  modes_clean: ", nrow(modes_clean), "records\n")
+```
+
+---
+
+# H1: Structural Legacies of Liana Infestation
+
+> **Question:** Does the history of liana infestation leave measurable
+> architectural legacies in host crown structure?
+>
+> **Models:** Six Bayesian LMMs (brms, Student-t family) — one per structural
+> metric — with `log(DBH)` as a fixed covariate and varying intercepts for
+> species and subplot. All response variables log-transformed.
+
+## Sample overview
+
+```{r}
+#| label: h1-sample
+
+# Distribution of trees across the three infestation-history categories
+count(dat_h1, H1_category) |>
+  rename(`Infestation history` = H1_category, `n trees` = n) |>
+  kable(caption = "H1 sample: trees by infestation-history category")
+```
+
+## Fit or load Bayesian models {#sec-h1-models}
+
+```{r}
+#| label: h1-models
+#| cache: false       # caching handled manually via .rds files (much faster)
+
+# Pre-fitted models are loaded from disk; delete the .rds to refit from scratch.
+# Fitting takes ~2–4 h on a standard laptop (4 chains × 4000 iterations).
+
+rds_h1 <- file.path(model_dir, "m_h1.rds")
+
+if (file.exists(rds_h1)) {
+  # ── Load ──────────────────────────────────────────────────────────────────
+  message("Loading pre-fitted H1 models from ", rds_h1)
+  m_h1 <- readRDS(rds_h1)
+
+} else {
+  # ── Fit ───────────────────────────────────────────────────────────────────
+  # Student-t family: downweights broken-crown outliers without removing them.
+  # log(metric) ~ log(DBH) + H1_category — tests whether infestation history
+  # shifts the allometric intercept after controlling for tree size.
+  # Slenderness and CBH: log_dbh omitted (DBH is algebraically in the ratio).
+  message("Fitting H1 models from scratch — this takes several hours...")
+  m_h1 <- list(
+    depth   = brm(log_depth   ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
+                  data = dat_h1, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    area    = brm(log_area    ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
+                  data = dat_h1, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    vol     = brm(log_vol     ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
+                  data = dat_h1, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    height  = brm(log_height  ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
+                  data = dat_h1, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    slender = brm(log_slender ~ H1_category + (1|species) + (1|sbpltnm),
+                  data = dat_h1, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    cbh     = brm(log_cbh     ~ H1_category + (1|species) + (1|sbpltnm),
+                  data = dat_h1, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2))
+  saveRDS(m_h1, rds_h1)
+  message("Models saved to ", rds_h1)
+}
+
+# Species with ≥5 trees AND present in the height model's random-effect levels
+# (used to filter RE plots to reliably estimated species)
+elig_h1 <- {
+  re_sp  <- rownames(ranef(m_h1$height)[["species"]])
+  dat_h1 |> count(species) |>
+    filter(n >= 5, as.character(species) %in% re_sp) |>
+    pull(species) |> as.character()
+}
+```
+
+## Results: % effects with 95% credible intervals {#sec-h1-results}
+
+```{r}
+#| label: h1-pct-tables
+
+# For each structural metric, print posterior mean and % change relative to
+# the Never-infested reference category.
+# ✓ in "Credible" column = 95% CrI excludes zero.
+
+metric_labels <- c(
+  height  = "Tree height",
+  depth   = "Crown depth",
+  area    = "Crown projected area",
+  vol     = "Crown volume",
+  slender = "Slenderness (height/DBH)",
+  cbh     = "Crown base height ratio"
+)
+
+for (nm in names(metric_labels)) {
+  cat("\n###", metric_labels[nm], "\n\n")
+  pct_table(m_h1[[nm]]) |>
+    kable(caption = paste0(metric_labels[nm],
+                           " — H1_category effects vs Never infested")) |>
+    print()
+  cat("\n")
+}
+```
+
+### Headline summary (copy-paste ready for thesis)
+
+```{r}
+#| label: h1-glue-reports
+
+# Formatted one-liners for each category × metric — ready to paste into thesis.
+# Format: "term: X% (LO to HI%)"
+report_pct <- function(model) {
+  fixef(model) |>
+    as_tibble(rownames = "term") |>
+    mutate(
+      pct_est  = (exp(Estimate) - 1) * 100,
+      pct_low  = (exp(Q2.5)    - 1) * 100,
+      pct_high = (exp(Q97.5)   - 1) * 100,
+      report   = glue("{term}: {round(pct_est,1)}% ({round(pct_low,1)} to {round(pct_high,1)}%)")
+    ) |>
+    pull(report)
+}
+
+for (nm in names(metric_labels)) {
+  cat("── ", metric_labels[nm], " ──\n", sep = "")
+  report_pct(m_h1[[nm]]) |> paste(collapse = "\n") |> cat()
+  cat("\n\n")
+}
+```
+
+## Figure 3: Crown metrics vs DBH by infestation history {#sec-h1-fig}
+
+```{r, warning=FALSE}
+#| label: h1-figure
+#| fig-width: 7
+#| fig-height: 6
+#| fig-cap: >
+#|   **H1: Impact of infestation history on crown architecture.**
+#|   Points are individual trees (alpha = 0.3); lines are brms population-level
+#|   fitted means; ribbons are 95% credible intervals. Solid lines indicate
+#|   credible effects (95% CrI excludes zero); dashed lines do not.
+
+# Significance flags for line-style encoding
+sig_flags_h1 <- map(m_h1, get_sig_flags_h1)
+
+# Factory function: allometric scatter + brms fitted line per infestation group
+make_h1_panel <- function(data, model, yvar, ylabel, sig_df, log_y = FALSE) {
+  df <- data |>
+    filter(!is.na(H1_category)) |>
+    left_join(sig_df, by = "H1_category") |>
+    mutate(lty = if_else(significant, "solid", "dashed"))
+
+  dbh_seq   <- seq(min(df$dbh_cm, na.rm = TRUE), max(df$dbh_cm, na.rm = TRUE), l = 100)
+  cats      <- intersect(names(pal_h1), unique(as.character(df$H1_category)))
+  pred_grid <- crossing(dbh_cm = dbh_seq,
+                        H1_category = factor(cats, levels = cats)) |>
+    mutate(log_dbh = log(dbh_cm))
+
+  # brms fitted() with re_formula = NA → population-level predictions only
+  fv <- fitted(model, newdata = pred_grid, re_formula = NA)
+  pred_grid <- pred_grid |>
+    mutate(!!yvar := exp(fv[, "Estimate"]),
+           ylo = exp(fv[, "Q2.5"]), yhi = exp(fv[, "Q97.5"])) |>
+    left_join(sig_df, by = "H1_category") |>
+    mutate(lty = if_else(significant, "solid", "dashed"))
+
+  p <- ggplot(df, aes_string("dbh_cm", yvar,
+                              colour = "H1_category", fill = "H1_category")) +
+    geom_point(alpha = 0.30, size = 1.0) +
+    geom_ribbon(data = pred_grid,
+                aes_string("dbh_cm", ymin = "ylo", ymax = "yhi"),
+                alpha = 0.15, colour = NA) +
+    geom_line(data = pred_grid,
+              aes_string("dbh_cm", yvar, colour = "H1_category", linetype = "lty"),
+              linewidth = 0.9) +
+    scale_linetype_identity() +
+    scale_colour_manual(values = pal_h1) +
+    scale_fill_manual(values   = pal_h1) +
+    labs(x = "DBH (cm)", y = ylabel, colour = NULL, fill = NULL) +
+    theme_thesis + theme(legend.position = "none")
+  if (log_y) p <- p + scale_y_continuous(trans = "log10", labels = label_comma())
+  p
+}
+
+p_h1 <- list(
+  depth  = make_h1_panel(dat_h1, m_h1$depth,  "crown_depth",
+                         "Crown depth (m)",                        sig_flags_h1$depth),
+  area   = make_h1_panel(dat_h1, m_h1$area,   "pa",
+                         expression("Crown area (m"^2*")"),        sig_flags_h1$area,  log_y = TRUE),
+  vol    = make_h1_panel(dat_h1, m_h1$vol,    "crown_vol",
+                         expression("Crown volume (m"^3*")"),      sig_flags_h1$vol,   log_y = TRUE),
+  height = make_h1_panel(dat_h1, m_h1$height, "height",
+                         "Tree height (m)",                        sig_flags_h1$height))
+
+legend_h1 <- get_legend(
+  p_h1$height +
+    theme(legend.position = "bottom", legend.title = element_blank(),
+          legend.text = element_text(size = 10), legend.key.width = unit(1.4, "cm")))
+
+fig_h1 <- plot_grid(
+  plot_grid(label_panel(p_h1$depth,  "a"), label_panel(p_h1$area,   "b"),
+            label_panel(p_h1$vol,    "c"), label_panel(p_h1$height, "d"),
+            nrow = 2, align = "hv"),
+  legend_h1, ncol = 1, rel_heights = c(1, 0.10))
+
+fig_h1   # display inline
+save_fig(fig_h1, "H1_crown_metrics_vs_dbh_4panel.png", width = 16, height = 14)
+```
+
+## Figure: Slenderness and crown base height ratio
+
+```{r}
+#| label: h1-slender-cbh
+#| fig-width: 7
+#| fig-height: 4
+#| fig-cap: >
+#|   **H1 (supporting):** Slenderness (height/DBH) and crown base height
+#|   ratio by infestation history. Violin plots used because DBH is
+#|   algebraically embedded in these ratios (allometric regression not shown).
+#|   Annotated p-values are posterior-direction probabilities from brms.
+
+pval_sl_lost  <- brm_pval(m_h1$slender, "Lost")
+pval_sl_pers  <- brm_pval(m_h1$slender, "Persistently")
+pval_cbh_lost <- brm_pval(m_h1$cbh,     "Lost")
+pval_cbh_pers <- brm_pval(m_h1$cbh,     "Persistently")
+
+make_violin_h1 <- function(data, yvar, ylabel, p_lost, p_pers) {
+  ymax <- max(data[[yvar]], na.rm = TRUE)
+  bump <- (ymax - min(data[[yvar]], na.rm = TRUE)) * 0.06
+  ggplot(filter(data, !is.na(H1_category)),
+         aes_string("H1_category", yvar,
+                    colour = "H1_category", fill = "H1_category")) +
+    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
+    geom_boxplot(width = 0.18, outlier.shape = NA,
+                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
+    geom_jitter(width = 0.12, height = 0, alpha = 0.40, size = 1.0) +
+    annotate("text", x = c(2, 3), y = ymax + bump * c(1, 3),
+             label = c(p_label(p_lost), p_label(p_pers)),
+             parse = TRUE, hjust = 0.5, size = 3.2, colour = "grey20") +
+    scale_colour_manual(values = pal_h1) +
+    scale_fill_manual(values   = pal_h1) +
+    labs(x = "Infestation history", y = ylabel) +
+    theme_thesis + theme(legend.position = "none",
+                         axis.text.x = element_text(angle = 20, hjust = 1))
+}
+
+fig_h1_supp <- plot_grid(
+  label_panel(make_violin_h1(dat_h1, "slenderness",
+                              "Slenderness (height / DBH)",
+                              pval_sl_lost, pval_sl_pers), "a"),
+  label_panel(make_violin_h1(dat_h1, "cbh_ratio",
+                              "Crown base height ratio",
+                              pval_cbh_lost, pval_cbh_pers), "b"),
+  nrow = 1, align = "hv")
+
+fig_h1_supp
+save_fig(fig_h1_supp, "H1_slenderness_cbh_ratio.png", width = 16, height = 9)
+```
+
+---
+
+# H1: Liana Impact on Host Plant Area Index
+
+> **Question:** Does liana infestation reduce the density of host foliage
+> within the crown (as measured by voxel-based PAI)?
+>
+> **Model:** Bayesian LMM (brms, Student-t) — `log(PAI_tree_only) ~ infest_cat +
+> log_dbh + (1|Species) + (1|sbpltnm)`.
+
+## Sample overview
+
+```{r}
+#| label: pai-sample
+count(clean_pai, infest_cat) |>
+  rename(`Liana load` = infest_cat, `n trees` = n) |>
+  kable(caption = "H1 sample: trees by liana load category")
+```
+
+## Fit or load model
+
+```{r}
+#| label: pai-model
+rds_pai <- file.path(model_dir, "m_pai_main.rds")
+
+if (file.exists(rds_pai)) {
+  message("Loading pre-fitted PAI model from ", rds_pai)
+  m_pai_main <- readRDS(rds_pai)
+} else {
+  message("Fitting PAI model from scratch...")
+  m_pai_main <- brm(
+    log(PAI_tree_only) ~ infest_cat + log_dbh + (1|Species) + (1|sbpltnm),
+    data = clean_pai, family = student(), seed = 42,
+    chains = 4, cores = 2, iter = 4000, warmup = 1000,
+    control = brm_ctrl, silent = 2)
+  saveRDS(m_pai_main, rds_pai)
+}
+
+# Species present in both infestation categories with ≥5 obs each (for RE plots)
+elig_pai <- clean_pai |>
+  mutate(inf = infest_cat != "None") |>
+  count(Species, inf) |>
+  pivot_wider(names_from = inf, values_from = n, values_fill = 0L) |>
+  filter(`TRUE` >= 5, `FALSE` >= 5) |>
+  pull(Species) |> as.character()
+```
+
+## Results
+
+```{r}
+#| label: pai-results
+pct_table(m_pai_main) |>
+  kable(caption = "H1 PAI model — effects relative to None (no lianas)")
+
+cat("\n")
+report_pct(m_pai_main) |> paste(collapse = "\n") |> cat()
+```
+
+## Figure: PAI by liana load
+
+```{r, warning=FALSE}
+#| label: pai-figure
+#| fig-width: 6
+#| fig-height: 5
+#| fig-cap: >
+#|   **H1:** Mean (±SE) PAI by liana load category.
+#|   Bars show Tree Only vs Tree + Liana PAI; Wilcoxon brackets indicate
+#|   significant within-category differences. Model p-values (brms) shown
+#|   for None → Light and None → Heavy comparisons.
+
+# p-values for model annotation (brms direction probability)
+pval_light_pai <- brm_pval(m_pai_main, "Light")
+pval_heavy_pai <- brm_pval(m_pai_main, "Heavy")
+
+# Long format for paired bars (Tree Only vs Combined per infestation level)
+long_main <- clean_pai |>
+  pivot_longer(c(PAI_tree_only, PAI_combined),
+               names_to = "Component", values_to = "PAI_Value") |>
+  mutate(Component = factor(
+    case_match(Component, "PAI_tree_only" ~ "Tree Only",
+               "PAI_combined" ~ "Tree + Liana"),
+    levels = c("Tree Only", "Tree + Liana"))) |>
+  filter(!(infest_cat == "None" & Component == "Tree + Liana"), !is.na(PAI_Value))
+
+n_labs_main <- long_main |>
+  count(infest_cat, Component, name = "n") |>
+  mutate(label = paste0("n = ", n))
+
+# Wilcoxon test: Tree Only vs Tree+Liana within Light and Heavy categories
+inf_lvls    <- levels(long_main$infest_cat)
+sig_pai_main <- long_main |>
+  filter(infest_cat != "None") |>
+  group_by(infest_cat) |>
+  summarise(p_val      = wilcox.test(PAI_Value[Component == "Tree Only"],
+                                     PAI_Value[Component == "Tree + Liana"],
+                                     exact = FALSE)$p.value,
+            y_position = max(PAI_Value, na.rm = TRUE) * 1.10, .groups = "drop") |>
+  filter(p_val < 0.05) |>
+  mutate(annotations = case_when(p_val < 0.001 ~ "***", p_val < 0.01 ~ "**", TRUE ~ "*"),
+         x_num = match(as.character(infest_cat), inf_lvls),
+         xmin  = x_num - 0.40, xmax = x_num + 0.40)
+
+# Brackets for model-level p-values (None → Light / None → Heavy)
+model_brackets <- tibble(
+  xmin  = c(0.8, 0.8), xmax = c(1.8, 2.8),
+  y_position  = max(long_main$PAI_Value, na.rm = TRUE) * c(1.12, 1.22),
+  annotations = c(p_label(pval_light_pai), p_label(pval_heavy_pai)))
+
+fig_pai <- ggplot(long_main,
+                  aes(x = infest_cat, y = PAI_Value, fill = Component)) +
+  stat_summary(fun = mean, geom = "bar",
+               position = position_dodge(0.8), width = 0.7) +
+  stat_summary(fun.data = mean_se, geom = "errorbar",
+               position = position_dodge(0.8), width = 0.22, linewidth = 0.5) +
+  geom_point(aes(group = Component),
+             position = position_jitterdodge(0.10, dodge.width = 0.8),
+             size = 1.0, alpha = 0.35, shape = 21, colour = "grey20", fill = "white",
+             show.legend = FALSE) +
+  geom_text(data = n_labs_main,
+            aes(x = infest_cat, y = 0, label = label, group = Component),
+            position = position_dodge(0.8), vjust = 1.6, size = 2.3,
+            colour = "grey45", inherit.aes = FALSE) +
+  geom_signif(data = model_brackets,
+              aes(xmin = xmin, xmax = xmax, annotations = annotations,
+                  y_position = y_position),
+              manual = TRUE, inherit.aes = FALSE, parse = TRUE,
+              tip_length = 0.015, textsize = 3.0) +
+  {if (nrow(sig_pai_main) > 0)
+    geom_signif(data = sig_pai_main,
+                aes(xmin = xmin, xmax = xmax, annotations = annotations,
+                    y_position = y_position),
+                manual = TRUE, inherit.aes = FALSE,
+                tip_length = 0.015, textsize = 3.5)} +
+  scale_fill_manual(values = pal_pai, name = "Measurement") +
+  scale_y_continuous(expand = expansion(mult = c(0.12, 0.16))) +
+  labs(x = "Liana load", y = expression(PAI ~ (m^{2} ~ m^{-2}))) +
+  theme_thesis + theme(legend.position = "bottom", legend.key.size = unit(0.45, "cm"))
+
+fig_pai
+save_fig(fig_pai, "H1_PAI_all_species_main.png", width = 14, height = 12)
+```
+
+---
+
+# H2: Pre-infestation Architecture as Predictor
+
+> **Question:** Does baseline crown architecture (TLS 2019) predict
+> subsequent liana acquisition (2019–2025)?
+>
+> **Models:** Same structure as H1 but `H2_category` (remained uninfested vs
+> gained infestation) as the key fixed effect, using only trees uninfested in 2019.
+
+## Sample overview
+
+```{r}
+#| label: h2-sample
+count(dat_h2, H2_category) |>
+  rename(`Infestation outcome` = H2_category, `n trees` = n) |>
+  kable(caption = "H2 sample: trees by infestation outcome (2019–2025)")
+```
+
+## Fit or load Bayesian models
+
+```{r}
+#| label: h2-models
+rds_h2 <- file.path(model_dir, "m_h2_lmm.rds")
+
+if (file.exists(rds_h2)) {
+  message("Loading pre-fitted H2 models from ", rds_h2)
+  m_h2_lmm <- readRDS(rds_h2)
+} else {
+  message("Fitting H2 models from scratch...")
+  m_h2_lmm <- list(
+    depth   = brm(log_depth   ~ log_dbh + H2_category + (1|species) + (1|sbpltnm),
+                  data = dat_h2, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    area    = brm(log_area    ~ log_dbh + H2_category + (1|species) + (1|sbpltnm),
+                  data = dat_h2, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    vol     = brm(log_vol     ~ log_dbh + H2_category + (1|species) + (1|sbpltnm),
+                  data = dat_h2, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    height  = brm(log_height  ~ log_dbh + H2_category + (1|species) + (1|sbpltnm),
+                  data = dat_h2, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    slender = brm(log_slender ~ H2_category + (1|species) + (1|sbpltnm),
+                  data = dat_h2, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2),
+    cbh     = brm(log_cbh     ~ H2_category + (1|species) + (1|sbpltnm),
+                  data = dat_h2, family = student(), seed = 42,
+                  chains = 4, cores = 2, iter = 4000, warmup = 1000,
+                  control = brm_ctrl, silent = 2))
+  saveRDS(m_h2_lmm, rds_h2)
+}
+
+# Species with ≥5 obs for RE plots (top 10 most represented)
+elig_h2_re <- dat_h2 |>
+  count(species, sort = TRUE) |>
+  slice_head(n = 10) |>
+  pull(species) |> as.character()
+```
+
+## Results
+
+```{r}
+#| label: h2-results
+for (nm in names(metric_labels)) {
+  cat("\n###", metric_labels[nm], "\n\n")
+  pct_table(m_h2_lmm[[nm]]) |>
+    kable(caption = paste0(metric_labels[nm],
+                           " — H2_category effect vs remained uninfested")) |>
+    print()
+  cat("\n")
+}
+```
+
+### Headline % effects (copy-paste for thesis)
+
+```{r}
+#| label: h2-glue-reports
+for (nm in names(metric_labels)) {
+  cat("── ", metric_labels[nm], " ──\n", sep = "")
+  report_pct(m_h2_lmm[[nm]]) |> paste(collapse = "\n") |> cat()
+  cat("\n\n")
+}
+```
+
+### H2 slenderness and CBH: % effects with CI
+
+```{r}
+#| label: h2-slender-cbh-pct
+# Supporting metrics formatted the same way for easy thesis reporting
+for (nm in c("slender", "cbh")) {
+  fe  <- fixef(m_h2_lmm[[nm]])
+  idx <- grep("H2_category", rownames(fe))
+  cat(metric_labels[nm], "\n")
+  cat("  Posterior mean:", round(fe[idx, "Estimate"], 3),
+      "  95% CrI [", round(fe[idx, "Q2.5"], 3), ",", round(fe[idx, "Q97.5"], 3), "]\n")
+  cat("  % effect:", round((exp(fe[idx,"Estimate"])-1)*100, 1),
+      "% (", round((exp(fe[idx,"Q2.5"])-1)*100, 1),
+      "to", round((exp(fe[idx,"Q97.5"])-1)*100, 1), "%)\n",
+      "  Credible:", sign(fe[idx,"Q2.5"]) == sign(fe[idx,"Q97.5"]), "\n\n")
+}
+```
+
+## Figure: Crown metrics vs DBH by infestation outcome
+
+```{r}
+#| label: h2-figure
+#| fig-width: 7
+#| fig-height: 6
+#| fig-cap: >
+#|   **H2:** Pre-infestation crown architecture (2019 TLS) by subsequent
+#|   infestation outcome (2019–2025). No credible difference between groups
+#|   in any metric (all 95% CrI span zero).
+
+sig_flags_h2 <- map(m_h2_lmm[c("depth","area","vol","height")], get_sig_flags_h2)
+
+make_h2_panel <- function(data, model, yvar, ylabel, sig_df, log_y = FALSE) {
+  df <- data |>
+    filter(!is.na(H2_category)) |>
+    left_join(sig_df, by = "H2_category") |>
+    mutate(lty = if_else(significant, "solid", "dashed"))
+
+  dbh_seq   <- seq(min(df$dbh_cm, na.rm = TRUE), max(df$dbh_cm, na.rm = TRUE), l = 100)
+  cats      <- intersect(names(pal_h2), unique(as.character(df$H2_category)))
+  pred_grid <- crossing(dbh_cm = dbh_seq,
+                        H2_category = factor(cats, levels = cats)) |>
+    mutate(log_dbh = log(dbh_cm))
+
+  fv <- fitted(model, newdata = pred_grid, re_formula = NA)
+  pred_grid <- pred_grid |>
+    mutate(!!yvar := exp(fv[, "Estimate"]),
+           ylo = exp(fv[, "Q2.5"]), yhi = exp(fv[, "Q97.5"])) |>
+    left_join(sig_df, by = "H2_category") |>
+    mutate(lty = if_else(significant, "solid", "dashed"))
+
+  p <- ggplot(df, aes_string("dbh_cm", yvar,
+                              colour = "H2_category", fill = "H2_category")) +
+    geom_point(alpha = 0.30, size = 1.0) +
+    geom_ribbon(data = pred_grid,
+                aes_string("dbh_cm", ymin = "ylo", ymax = "yhi"),
+                alpha = 0.15, colour = NA) +
+    geom_line(data = pred_grid,
+              aes_string("dbh_cm", yvar, colour = "H2_category", linetype = "lty"),
+              linewidth = 0.9) +
+    scale_linetype_identity() +
+    scale_colour_manual(values = pal_h2) +
+    scale_fill_manual(values   = pal_h2) +
+    labs(x = "DBH (cm)", y = ylabel, colour = NULL, fill = NULL) +
+    theme_thesis + theme(legend.position = "none")
+  if (log_y) p <- p + scale_y_continuous(trans = "log10", labels = label_comma())
+  p
+}
+
+p_h2 <- list(
+  depth  = make_h2_panel(dat_h2, m_h2_lmm$depth,  "crown_depth",
+                         "Crown depth (m)",                   sig_flags_h2$depth),
+  area   = make_h2_panel(dat_h2, m_h2_lmm$area,   "pa",
+                         expression("Crown area (m"^2*")"),   sig_flags_h2$area,  log_y = TRUE),
+  vol    = make_h2_panel(dat_h2, m_h2_lmm$vol,    "crown_vol",
+                         expression("Crown volume (m"^3*")"), sig_flags_h2$vol,   log_y = TRUE),
+  height = make_h2_panel(dat_h2, m_h2_lmm$height, "height",
+                         "Tree height (m)",                   sig_flags_h2$height))
+
+legend_h2 <- get_legend(
+  p_h2$height +
+    theme(legend.position = "bottom", legend.title = element_blank(),
+          legend.text = element_text(size = 10), legend.key.width = unit(1.4, "cm")))
+
+fig_h2 <- plot_grid(
+  plot_grid(label_panel(p_h2$depth,  "a"), label_panel(p_h2$area,   "b"),
+            label_panel(p_h2$vol,    "c"), label_panel(p_h2$height, "d"),
+            nrow = 2, align = "hv"),
+  legend_h2, ncol = 1, rel_heights = c(1, 0.10))
+
+fig_h2
+save_fig(fig_h2, "H2_crown_metrics_vs_dbh_4panel.png", width = 16, height = 14)
+```
+
+## Figure: Initial tree height (TLS 2019) by subsequent infestation outcome
+
+```{r}
+#| label: h2-height-by-species
+#| fig-width: 7
+#| fig-height: 5
+#| fig-cap: >
+#|   **H2 (exploratory):** Distribution of 2019 TLS height for trees that
+#|   subsequently gained infestation vs remained uninfested, shown for the
+#|   6 most-represented species. The pooled model shows no credible
+#|   height difference between outcomes (95% CrI spans zero).
+
+# Top 6 species 
+# For fig_h2_ht (TLS 2019)
+top6_h2_sp <- dat_h2 |>
+  filter(species != "Pouteria reticulata") |>
+  count(species) |>
+  slice_max(n, n = 6) |>
+  pull(species) |>
+  as.character()
+# Pooled model p-value for annotation
+h2_ht_pval <- brm_pval(m_h2_lmm$height, "gained")
+
+fig_h2_ht <- dat_h2 |>
+  filter(as.character(species) %in% top6_h2_sp) |>
+  mutate(species = factor(as.character(species), levels = top6_h2_sp)) |>
+  ggplot(aes(H2_category, height, colour = H2_category, fill = H2_category)) +
+    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
+    geom_boxplot(width = 0.18, outlier.shape = NA,
+                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
+    geom_jitter(width = 0.12, height = 0, alpha = 0.50, size = 1.2) +
+    facet_wrap(~ species, scales = "free_y", ncol = 3) +
+    annotate("text", x = 1.5, y = Inf,
+             label = p_label(h2_ht_pval), parse = TRUE,
+             hjust = 0.5, vjust = 1.5, size = 3.0, colour = "grey20") +
+    scale_colour_manual(values = pal_h2) +
+    scale_fill_manual(values   = pal_h2) +
+    labs(x = "Infestation outcome (2019–2025)",
+         y = "Tree height — TLS 2019 (m)") +
+    theme_thesis +
+    theme(legend.position = "none",
+          axis.text.x     = element_text(angle = 20, hjust = 1),
+          strip.text       = element_text(face = "italic"))
+
+fig_h2_ht
+save_fig(fig_h2_ht, "H2_height_by_outcome_top6sp.png", width = 16, height = 10)
+
+```
+
+```{r}
+#| label: h2-height-2011
+#| fig-width: 7
+#| fig-height: 5
+#| fig-cap: >
+#|   **H2 (exploratory, larger sample):** Distribution of ground-measured
+#|   height (2011) for trees that subsequently gained liana infestation vs
+#|   remained uninfested by 2019, shown for the 6 most-represented species.
+#|   Analysis period 2011–2019; n larger than the TLS dataset because
+#|   field heights were recorded across all dendrometer subplots.
+
+# Sample overview
+cat("2011 height dataset — n by outcome:\n")
+print(count(dat_h2_2011, h2_2011_category))
+cat("Species represented:", n_distinct(dat_h2_2011$species), "\n\n")
+
+# Top 6 species for fig_h2_ht_2011
+top6_2011 <- dat_h2_2011 |>
+  count(species) |>
+  slice_max(n, n = 6) |>
+  pull(species) |> as.character()
+
+# Pooled Bayesian LMM for annotation (fits quickly — no random slopes)
+rds_h2_2011 <- file.path(model_dir, "m_h2_2011_height.rds")
+
+if (file.exists(rds_h2_2011)) {
+  m_h2_2011_ht <- readRDS(rds_h2_2011)
+} else {
+  m_h2_2011_ht <- brm(
+    log_height_2011 ~ log_dbh_2011 + h2_2011_category + (1|species) + (1|sbpltnm),
+    data    = dat_h2_2011,
+    family  = student(),
+    seed    = 42, chains = 4, cores = 2, iter = 4000, warmup = 1000,
+    control = brm_ctrl, silent = 2)
+  saveRDS(m_h2_2011_ht, rds_h2_2011)
+}
+
+h2_2011_pval <- brm_pval(m_h2_2011_ht, "gained")
+cat("2011 height model — gained infestation effect:\n")
+pct_table(m_h2_2011_ht) |> kable() |> print()
+cat("\n")
+report_pct(m_h2_2011_ht) |> paste(collapse = "\n") |> cat()
+
+# Figure: same style as the TLS 2019 height figure
+fig_h2_ht_2011 <- dat_h2_2011 |>
+  filter(as.character(species) %in% top6_2011) |>
+  mutate(
+    species = factor(as.character(species), levels = top6_2011),
+    species = recode(species,
+      "QUARAS" = "Quararibea asterolepis",
+      "JAC1CO" = "Jacaranda copaia",
+      "PRI2CO" = "Prioria copaifera",
+      "TRI2TU" = "Trichilia tuberculata",
+      "CECRIN" = "Cecropia insignis",
+      "ALSEBL" = "Alseis blackiana"
+    )
+  ) |>
+  ggplot(aes(h2_2011_category, height_2011,
+             colour = h2_2011_category, fill = h2_2011_category)) +
+    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
+    geom_boxplot(width = 0.18, outlier.shape = NA,
+                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
+    geom_jitter(width = 0.12, height = 0, alpha = 0.50, size = 1.2) +
+    facet_wrap(~ species, scales = "free_y", ncol = 3) +
+    annotate("text", x = 1.5, y = Inf,
+             label = p_label(h2_2011_pval), parse = TRUE,
+             hjust = 0.5, vjust = 1.5, size = 3.0, colour = "grey20") +
+    scale_colour_manual(values = pal_h2) +
+    scale_fill_manual(values   = pal_h2) +
+    labs(x = "Infestation outcome (2011–2019)",
+         y = "Tree height — ground-measured 2011 (m)") +
+    theme_thesis +
+    theme(
+      legend.position = "none",
+      axis.text.x     = element_text(angle = 20, hjust = 1),
+      strip.text      = element_text(face = "italic")
+    )
+
+fig_h2_ht_2011
+save_fig(fig_h2_ht_2011, "H2_height_2011_by_outcome_top6sp.png", width = 16, height = 10)
+
+
+```
+
+
+---
+
+# H2b: Infestation Pathway and Climbing Mode
+
+> **Question:** Is infestation pathway (Direct/Lateral/Both) or liana climbing
+> class (Active/Passive) associated with subsequent infestation outcome or crown
+> architecture?
+
+## §7 Pathway × outcome chi-square test
+
+```{r}
+#| label: pathway-chisq
+
+# Contingency table: infestation type × H2 outcome
+tbl_path <- table(pathway_dat$H2_category, pathway_dat$infestation_type)
+chi_path <- chisq.test(tbl_path)
+
+cat("Contingency table: pathway × H2 outcome\n")
+print(tbl_path)
+cat("\nChi-square test:\n")
+print(chi_path)
+```
+
+## §7 Infestation type proportional bar chart by species
+
+```{r}
+#| label: h2b-pathway-fig
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: >
+#|   Proportion of infested trees by infestation pathway (Direct/Lateral/Both)
+#|   for the six focal species.
+
+inf_type_sp <- modes_clean |>
+  filter(species %in% target_species, !is.na(infestation_type)) |>
+  mutate(infestation_type = str_to_title(str_squish(infestation_type))) |>
+  filter(infestation_type %in% c("Direct","Lateral","Both")) |>
+  distinct(tag6, species, infestation_type) |>
+  count(species, infestation_type, name = "n") |>
+  group_by(species) |>
+  mutate(prop    = n / sum(n),
+         species = factor(species, levels = rev(target_species))) |>
+  ungroup() |>
+  mutate(infestation_type = factor(infestation_type, levels = c("Direct","Lateral","Both")))
+
+fig_pathway_sp <- ggplot(inf_type_sp, aes(species, prop, fill = infestation_type)) +
+  geom_col(width = 0.75, colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = if_else(prop >= 0.07, percent(prop, 1), "")),
+            position = position_stack(vjust = 0.5),
+            size = 3.0, colour = "grey10") +
+  scale_fill_manual(values = pal_mode, name = "Infestation pathway") +
+  scale_y_continuous(labels = percent_format(1), expand = c(0, 0)) +
+  labs(x = NULL, y = "Proportion of infested trees") +
+  coord_flip() + theme_thesis +
+  theme(axis.text.y = element_text(face = "italic"), legend.position = "right")
+
+fig_pathway_sp
+save_fig(fig_pathway_sp, "H2b_infestation_type_by_species.png", width = 14, height = 7)
+```
+
+## §8 Active vs Passive climbing class × crown architecture
+
+```{r}
+#| label: h2b-ap-models
+
+# Fast OLS models (species included as fixed effect; small n not suited to LMM)
+m_type <- list(
+  depth  = lm(log_depth  ~ infestation_type + log_dbh + species, dat_mode),
+  area   = lm(log_area   ~ infestation_type + log_dbh + species, dat_mode),
+  vol    = lm(log_vol    ~ infestation_type + log_dbh + species, dat_mode),
+  height = lm(log_height ~ infestation_type + log_dbh + species, dat_mode))
+
+m_ap <- list(
+  depth  = lm(log_depth  ~ dominant_class + log_dbh + species, dat_mode_ap),
+  area   = lm(log_area   ~ dominant_class + log_dbh + species, dat_mode_ap),
+  vol    = lm(log_vol    ~ dominant_class + log_dbh + species, dat_mode_ap),
+  height = lm(log_height ~ dominant_class + log_dbh + species, dat_mode_ap))
+
+pvals_type <- map_dbl(m_type, ~ anova(.x)["infestation_type", "Pr(>F)"])
+pvals_ap   <- map_dbl(m_ap,   ~ summary(.x)$coefficients["dominant_classPassive","Pr(>|t|)"])
+
+# Quick summary table
+tibble(
+  Metric = metric_labels[names(pvals_ap)],
+  `p (pathway type)` = round(pvals_type[names(pvals_ap)], 3),
+  `p (Active vs Passive)` = round(pvals_ap, 3)
+) |> kable(caption = "H2b OLS p-values for infestation type and climbing class")
+```
+
+```{r}
+#| label: h2b-ap-figure
+#| fig-width: 7
+#| fig-height: 4
+#| fig-cap: >
+#|   **H2b:** Crown depth, projected area, and volume by liana climbing class
+#|   (Active vs Passive), controlling for DBH and species.
+
+make_box_panel <- function(data, xvar, yvar, ylabel, pal, pval, log_y = FALSE) {
+  p <- ggplot(data, aes_string(xvar, yvar, colour = xvar)) +
+    geom_boxplot(width = 0.45, outlier.shape = NA, alpha = 0.18, linewidth = 0.6) +
+    geom_jitter(width = 0.12, height = 0, alpha = 0.60, size = 1.4) +
+    annotate("text", x = Inf, y = Inf, label = p_label(pval), parse = TRUE,
+             hjust = 1.1, vjust = 1.5, size = 3.5, colour = "grey20") +
+    scale_colour_manual(values = pal, name = NULL) +
+    labs(y = ylabel) + theme_thesis + theme(legend.position = "none")
+  if (log_y) p <- p + scale_y_continuous(trans = "log10", labels = label_comma())
+  p
+}
+
+p_ap <- list(
+  depth = make_box_panel(dat_mode_ap, "dominant_class", "crown_depth",
+                         "Crown depth (m)", pal_ap, pvals_ap["depth"]) +
+          labs(x = "Climbing class"),
+  area  = make_box_panel(dat_mode_ap, "dominant_class", "pa",
+                         expression("Crown area (m"^2*")"),
+                         pal_ap, pvals_ap["area"], TRUE) + labs(x = "Climbing class"),
+  vol   = make_box_panel(dat_mode_ap, "dominant_class", "crown_vol",
+                         expression("Crown volume (m"^3*")"),
+                         pal_ap, pvals_ap["vol"],  TRUE) + labs(x = "Climbing class"))
+
+legend_ap <- get_legend(
+  p_ap$depth + scale_colour_manual(values = pal_ap, name = "Climbing class") +
+    theme(legend.position = "bottom"))
+
+fig_ap <- plot_grid(
+  plot_grid(label_panel(p_ap$depth, "a"), label_panel(p_ap$area, "b"),
+            label_panel(p_ap$vol,   "c"), nrow = 1, align = "hv"),
+  legend_ap, ncol = 1, rel_heights = c(1, 0.12))
+
+fig_ap
+save_fig(fig_ap, "H2b_active_vs_passive_crown.png", width = 16, height = 9)
+```
+
+## §8.3 Species × climbing mode bar charts
+
+```{r}
+#| label: h2b-mode-figs
+#| fig-width: 7
+#| fig-height: 4
+#| fig-cap: >
+#|   Proportions of climbing modes (left) and classes (right) per focal species.
+
+mode_props <- modes_clean |>
+  filter(species %in% target_species, !is.na(mode)) |>
+  count(species, mode) |>
+  group_by(species) |> mutate(prop = n / sum(n)) |> ungroup() |>
+  mutate(mode    = str_to_title(str_replace_all(mode, "_", " ")),
+         species = factor(species, levels = rev(target_species)))
+
+mode_order <- mode_props |> group_by(mode) |>
+  summarise(tot = sum(n), .groups = "drop") |>
+  arrange(desc(tot)) |> pull(mode)
+mode_props  <- mutate(mode_props, mode = factor(mode, levels = mode_order))
+mode_cols   <- setNames(unname(okabe)[seq_len(n_distinct(mode_props$mode))],
+                        levels(mode_props$mode))
+
+fig_modes <- ggplot(mode_props, aes(species, prop, fill = mode)) +
+  geom_col(width = 0.75, colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = if_else(prop >= 0.07, percent(prop, 1), "")),
+            position = position_stack(vjust = 0.5), size = 3.0, colour = "grey10") +
+  scale_fill_manual(values = mode_cols, name = "Climbing mode") +
+  scale_y_continuous(labels = percent_format(1), expand = c(0, 0)) +
+  labs(x = NULL, y = "Proportion of recorded lianas") +
+  coord_flip() + theme_thesis +
+  theme(axis.text.y = element_text(face = "italic"), legend.position = "right")
+
+class_props <- modes_clean |>
+  filter(species %in% target_species, !is.na(climb_class)) |>
+  count(species, climb_class) |>
+  group_by(species) |> mutate(prop = n / sum(n)) |> ungroup() |>
+  mutate(climb_class = factor(climb_class, levels = c("Active","Passive")),
+         species     = factor(species, levels = rev(target_species)))
+
+fig_classes <- ggplot(class_props, aes(species, prop, fill = climb_class)) +
+  geom_col(width = 0.70, colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = if_else(prop >= 0.07, percent(prop, 1), "")),
+            position = position_stack(vjust = 0.5), size = 3.0, colour = "grey10") +
+  scale_fill_manual(values = pal_ap, name = "Climbing class") +
+  scale_y_continuous(labels = percent_format(1), expand = c(0, 0)) +
+  labs(x = NULL, y = "Proportion of recorded lianas") +
+  coord_flip() + theme_thesis +
+  theme(axis.text.y = element_text(face = "italic"), legend.position = "right")
+
+plot_grid(fig_modes, fig_classes, ncol = 1, labels = c("a", "b"))
+save_fig(fig_modes,   "H2b_climbing_mode_by_species.png",   width = 14, height = 8)
+save_fig(fig_classes, "H2b_active_passive_by_species.png",  width = 14, height = 7)
+
+```
+
+---
+
+# Appendix
+
+## A1: Height model comparison — log-log vs Michaelis-Menten
+
+```{r}
+#| label: app-mm-comparison
+
+# Tests whether liana effects on height reflect an intercept shift in the
+# log-log allometry (our main model) vs a change in asymptotic max height
+# or the half-saturation constant (Michaelis-Menten alternatives).
+# Rule: if ΔAIC(MM vs log-log) > 2, retain log-log.
+
+dat_h1_ht <- dat_h1 |>
+  filter(is.finite(height), is.finite(dbh_cm), dbh_cm > 0, height > 0)
+
+sv_asym <- quantile(dat_h1_ht$height, 0.95)
+sv_half <- median(dat_h1_ht$dbh_cm)
+
+# Reference: log-log lmer (REML = FALSE for fair AIC comparison)
+m_loglog_ht <- lmer(log_height ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
+                    data = dat_h1_ht, REML = FALSE)
+
+# Helper: try nlme MM model; return NULL on convergence failure
+try_nlme <- function(fixed_formula, start_vals, label) {
+  tryCatch(
+    nlme(height ~ (Asym * dbh_cm) / (half + dbh_cm),
+         fixed   = fixed_formula, random = Asym ~ 1 | species,
+         data    = dat_h1_ht, start = start_vals,
+         control = nlmeControl(maxIter = 300, msMaxIter = 300, pnlsTol = 0.02)),
+    error = function(e) { message(label, " failed: ", conditionMessage(e)); NULL }
+  )
+}
+
+m_mm_asym <- try_nlme(
+  fixed_formula = list(Asym ~ H1_category, half ~ 1),
+  start_vals    = c(Asym = sv_asym,
+                    `Asym.H1_categoryLost lianas` = 0,
+                    `Asym.H1_categoryPersistently infested` = 0,
+                    half = sv_half),
+  label = "MM (Asym only)")
+
+m_mm_half <- try_nlme(
+  fixed_formula = list(Asym ~ 1, half ~ H1_category),
+  start_vals    = c(Asym = sv_asym, half = sv_half,
+                    `half.H1_categoryLost lianas` = 0,
+                    `half.H1_categoryPersistently infested` = 0),
+  label = "MM (half only)")
+
+# Comparison table
+make_row <- function(mod, label) {
+  if (is.null(mod))
+    return(tibble(Model = label, AIC = NA, BIC = NA, `ΔAIC vs log-log` = NA,
+                  Verdict = "did not converge"))
+  tibble(Model = label, AIC = round(AIC(mod), 1), BIC = round(BIC(mod), 1),
+         `ΔAIC vs log-log` = round(AIC(mod) - AIC(m_loglog_ht), 1),
+         Verdict = if_else(AIC(mod) - AIC(m_loglog_ht) > 2,
+                           "log-log preferred", "similar fit"))
+}
+
+tbl_height_compare <- bind_rows(
+  tibble(Model = "log(H) ~ log(DBH) [log-log lmer]",
+         AIC = round(AIC(m_loglog_ht), 1), BIC = round(BIC(m_loglog_ht), 1),
+         `ΔAIC vs log-log` = 0, Verdict = "← reference"),
+  make_row(m_mm_asym, "MM: Asym ~ H1_category, half ~ 1"),
+  make_row(m_mm_half, "MM: Asym ~ 1, half ~ H1_category"))
+
+tbl_height_compare |>
+  kable(caption = "Height model comparison: log-log vs Michaelis-Menten alternatives")
+
+write_csv(tbl_height_compare,
+          file.path(tables_dir, "height_model_comparison_loglog_vs_MM.csv"))
+```
+
+## A2: Interaction model — does infestation change the height–DBH slope?
+
+```{r}
+#| label: app-interaction
+
+# Additive model: liana changes the allometric INTERCEPT only (our main H1 model)
+# Interaction model: liana changes the SLOPE (allometric exponent)
+# If ΔAIC favours the additive model, the intercept-shift interpretation holds.
+
+m_h1_ht_add  <- lmer(log_height ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
+                      dat_h1, REML = FALSE)
+m_h1_ht_int  <- lmer(log_height ~ log_dbh * H1_category + (1|species) + (1|sbpltnm),
+                      dat_h1, REML = FALSE)
+
+tibble(
+  Model   = c("Additive (intercept shift)", "Interaction (slope change)"),
+  AIC     = round(c(AIC(m_h1_ht_add), AIC(m_h1_ht_int)), 1),
+  BIC     = round(c(BIC(m_h1_ht_add), BIC(m_h1_ht_int)), 1),
+  `ΔAIC`  = round(c(0, AIC(m_h1_ht_int) - AIC(m_h1_ht_add)), 1),
+  LRT_p   = c(NA, round(anova(m_h1_ht_add, m_h1_ht_int)$`Pr(>Chisq)`[2], 4))
+) |> kable(caption = "Additive vs interaction height model comparison")
+```
+
+## A3: Random-effects plots — H1 species intercepts
+
+```{r}
+#| label: app-h1-re
+#| fig-width: 6
+#| fig-height: 8
+#| fig-cap: >
+#|   Species random intercepts from the H1 height model. Points are posterior
+#|   means; bars are 95% credible intervals. Blue/red = credibly higher/lower
+#|   than the population mean; grey = not credible.
+
+# Only show species with ≥5 trees (elig_h1 defined in sec-h1-models)
+fig_re_ht <- plot_re_ci(m_h1$height, "H1 species RE — tree height", elig_h1)
+fig_re_ht
+save_fig(fig_re_ht,
+         file.path("random_effects", "H1_RE_height.png"),
+         14, max(8, length(elig_h1) * 0.55))
+```
+
+```{r}
+#| label: app-h1-re-all
+#| include: false   # render all 6 RE plots silently; view files in random_effects/
+
+re_titles_h1 <- c(depth  = "Crown depth",  area  = "Crown projected area",
+                  vol    = "Crown volume",  height = "Tree height",
+                  slender = "Slenderness",  cbh   = "Crown base height ratio")
+
+iwalk(m_h1, function(mod, nm) {
+  p <- plot_re_ci(mod, paste("Species RE —", re_titles_h1[nm]), elig_h1)
+  save_fig(p, file.path("random_effects", paste0("H1_RE_", nm, ".png")),
+           14, max(8, length(elig_h1) * 0.55))
+})
+```
+
+## A4: % infested vs species random effect
+
+```{r}
+#| label: app-re-scatter
+#| fig-width: 5
+#| fig-height: 5
+#| fig-cap: >
+#|   Spearman correlation between species-level % persistently infested
+#|   (observed) and the species random intercept from the H1 height model.
+#|   A negative correlation would suggest that highly infested species
+#|   tend to be shorter than the population average.
+
+pct_inf <- dat_h1 |>
+  filter(species %in% elig_h1) |>
+  group_by(species) |>
+  summarise(pct_inf = mean(H1_category == "Persistently infested", na.rm = TRUE),
+            .groups = "drop")
+
+re_sp_ht <- {
+  re_arr <- ranef(m_h1$height)[["species"]]
+  tibble(species = rownames(re_arr),
+         re_est  = re_arr[, "Estimate", "Intercept"]) |>
+    filter(species %in% elig_h1)
+}
+
+re_pct_dat <- left_join(pct_inf, re_sp_ht, by = "species")
+cor_rho     <- cor(re_pct_dat$pct_inf, re_pct_dat$re_est,
+                   method = "spearman", use = "complete.obs")
+
+cat("Spearman r =", round(cor_rho, 3), "\n")
+
+fig_re_scatter <- ggplot(re_pct_dat, aes(pct_inf, re_est)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey70") +
+  geom_point(size = 3, colour = pal_h1["Persistently infested"]) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8,
+              colour = "grey30", fill = "grey80") +
+  geom_text_repel(aes(label = species), size = 2.5, fontface = "italic",
+                  max.overlaps = 20) +
+  annotate("text", x = Inf, y = Inf,
+           label = sprintf("italic(r)[s] == '%.2f'", cor_rho), parse = TRUE,
+           hjust = 1.1, vjust = 1.5, size = 3.5, colour = "grey20") +
+  labs(x = "Proportion persistently infested (2019)",
+       y = "Species RE on log(height)") +
+  theme_thesis
+
+fig_re_scatter
+save_fig(fig_re_scatter,
+         file.path("random_effects", "H1_pct_infested_vs_RE_height.png"),
+         14, 10)
+```
+
+## A5: Appendix PAI — top 12 species
+
+```{r, warning=FALSE}
+#| label: app-pai-top12
+#| fig-width: 7
+#| fig-height: 10
+#| fig-cap: Species-level PAI by liana load for the 12 most represented species.
+
+top12_sp <- count(clean_pai, Species, sort = TRUE) |>
+  slice_head(n = 12) |> pull(Species)
+
+long_top12 <- clean_pai |>
+  filter(as.character(Species) %in% top12_sp) |>
+  pivot_longer(c(PAI_tree_only, PAI_combined),
+               names_to = "Component", values_to = "PAI_Value") |>
+  mutate(Component = factor(
+    case_match(Component, "PAI_tree_only" ~ "Tree Only",
+               "PAI_combined" ~ "Tree + Liana"),
+    levels = c("Tree Only","Tree + Liana"))) |>
+  filter(!is.na(PAI_Value))
+
+sig_top12 <- long_top12 |>
+  group_by(Species, infest_cat) |>
+  summarise(p_val = {
+    g1 <- PAI_Value[Component == "Tree Only"]
+    g2 <- PAI_Value[Component == "Tree + Liana"]
+    if (length(g1) >= 2 & length(g2) >= 2)
+      wilcox.test(g1, g2, exact = FALSE)$p.value else NA_real_
+  }, y_position = max(PAI_Value, na.rm = TRUE) * 1.10, .groups = "drop") |>
+  filter(!is.na(p_val), p_val < 0.05) |>
+  mutate(annotations = case_when(p_val < 0.001 ~ "***", p_val < 0.01 ~ "**", TRUE ~ "*"),
+         x_num = match(as.character(infest_cat), c("None","Light","Heavy")),
+         xmin  = x_num - 0.40, xmax = x_num + 0.40)
+
+fig_pai_sp <- ggplot(long_top12, aes(x = infest_cat, y = PAI_Value, fill = Component)) +
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(0.8), width = 0.7) +
+  stat_summary(fun.data = mean_se, geom = "errorbar",
+               position = position_dodge(0.8), width = 0.22, linewidth = 0.5) +
+  geom_point(aes(group = Component),
+             position = position_jitterdodge(0.10, dodge.width = 0.8),
+             size = 0.9, alpha = 0.35, shape = 21,
+             colour = "grey20", fill = "white", show.legend = FALSE) +
+  {if (nrow(sig_top12) > 0)
+    geom_signif(data = sig_top12,
+                aes(xmin = xmin, xmax = xmax,
+                    annotations = annotations, y_position = y_position),
+                manual = TRUE, inherit.aes = FALSE,
+                tip_length = 0.015, textsize = 3.0)} +
+  facet_wrap(~ Species, scales = "free_y", ncol = 3) +
+  scale_fill_manual(values = pal_pai, name = "Measurement") +
+  scale_y_continuous(expand = expansion(mult = c(0.12, 0.08))) +
+  labs(x = "Liana load", y = expression(PAI ~ (m^{2} ~ m^{-2}))) +
+  theme_thesis +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1, size = 9))
+
+fig_pai_sp
+save_fig(fig_pai_sp, "APPENDIX_H1_PAI_top12_species.png", width = 18, height = 20)
+```
+
+---
+
+```{r}
+#| label: session-info
+#| code-fold: false
+sessionInfo()
+```

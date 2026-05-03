@@ -1,0 +1,118 @@
+fid,sbpltnm,tag,species,quadrnt,tag6,lianas_2019,notes_2019,notes_2025,liana_tag_1,liana_tag_2,liana_tag_3,liana_tag_4,liana_tag_5,infestation_type,mode_l1,mode_l2,mode_l3,mode_l4,mode_l5,five_plus,x,y,priority,H2_category,inf_type_bin,lateral
+683,94,000359,Alseis blackiana,4717,000359,0,NA,NA,01470792,NA,NA,NA,NA,Direct,scrambling,prehensile_branches,adhesive_roots,adhesive_roots,NA,NA,-79.8465741745657,9.15404335101398,completed,remained infested,Non-lateral,0
+131,94,000360,Quararibea asterolepis,4717,000360,0,NA,Crown not visible,NA,NA,NA,NA,NA,Both,scrambling,twining,twining,twining,NA,NA,-79.846584763906307,9.15407811205866,completed,gained infestation,Non-lateral,1
+758,94,000365,Guarea guidonia,4716,000365,0,NA,Very highly infested,40301,01470761,NA,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.8466444237192,9.15391282168666,completed,gained infestation,Non-lateral,1
+372,92,000444,Tetragastris panamensis,4704,000444,20,NA,"I am almost certain this is the tree, however the tag was not visible due to foliage being in the way.",NA,NA,NA,NA,NA,Both,scrambling,adhesive_roots,scrambling,scrambling,scrambling,NA,-79.8466502286326,9.15174760862918,completed,remained infested,Non-lateral,1
+129,92,000518,Quararibea asterolepis,4605,000518,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8467715146707,9.15197089396134,completed,remained infested,Lateral,1
+576,92,000520,Luehea seemannii,4605,000520,100,NA,Very heavy infestation,01460256,01460258,01460235,01460250,01460244,Both,NA,NA,NA,NA,NA,twining,-79.8467688170299,9.15191921902627,completed,remained infested,Non-lateral,1
+128,91,000612,Quararibea asterolepis,4620,000612,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8467415989751,9.15475691622474,completed,remained uninfested,Lateral,1
+414,82,001072,Quararibea asterolepis,4315,001072,50,NA,NA,NA,NA,NA,NA,NA,Both,twining,twining,NA,NA,NA,NA,-79.8472016388085,9.15376245823477,completed,remained infested,Non-lateral,1
+151,82,001078,Tabebuia guayacan,4314,001078,0,only lianas on the stem,NA,NA,NA,NA,NA,NA,Direct,NA,NA,NA,NA,NA,twining,-79.8472862439386,9.15363786732288,completed,gained infestation,Non-lateral,0
+677,82,001082,Alseis blackiana,4314,001082,0,sub correcte: 1,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,NA,NA,NA,NA,NA,-79.8473804978731,9.15357424641487,completed,gained infestation,Non-lateral,0
+65,82,001280,Poulsenia armata,4214,001280,0,NA,Trunk heavily infested,NA,NA,NA,NA,NA,Direct,tendrils,twining_petioles,adhesive_roots,adhesive_roots,adhesive_roots,NA,-79.8474191200405,9.15369053796925,completed,remained uninfested,Non-lateral,0
+678,82,001283,Alseis blackiana,4215,001283,0,NA,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,scrambling,NA,NA,NA,NA,-79.8475459558704,9.15375928233463,completed,gained infestation,Non-lateral,0
+676,77,001718,Alseis blackiana,4020,001718,0,NA,NA,NA,NA,NA,NA,NA,Direct,scrambling,NA,NA,NA,NA,NA,-79.8477211192659,9.1546884886659,completed,gained infestation,Non-lateral,0
+119,77,001728,Quararibea asterolepis,4021,001728,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8477732565867,9.15488489016278,completed,gained infestation,Lateral,1
+208,77,001773,Trichilia tuberculata,3921,001773,0,NA,Very damaged crown,NA,NA,NA,NA,NA,Both,adhesive_roots,adhesive_roots,NA,NA,NA,NA,-79.8478850222794,9.15496757858919,completed,remained uninfested,Non-lateral,1
+675,77,001775,Alseis blackiana,3921,001775,0,NA,Hard to see crown,NA,NA,NA,NA,NA,Direct,adhesive_roots,NA,NA,NA,NA,NA,-79.8480119218897,9.15498384116442,completed,remained uninfested,Non-lateral,0
+209,77,001783,Trichilia tuberculata,3920,001783,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8479693651014,9.1547742058082,completed,gained infestation,Lateral,1
+347,74,001982,Heisteria concinna,3810,001982,15,NA,NA,01380346,15454,15455,NA,NA,Direct,NA,NA,NA,NA,NA,twining,-79.8482513822017,9.15295540708629,completed,remained infested,Non-lateral,0
+114,74,001983,Quararibea asterolepis,3810,001983,0,broken crown,NA,01380899,31096,NA,NA,NA,Both,scrambling,twining,scrambling,NA,NA,NA,-79.8482090949081,9.15299191361154,completed,gained infestation,Non-lateral,1
+463,74,001985,Quararibea asterolepis,3810,001985,85,NA,For tag 3 it was found next to liana stem,01380337,15461,01380366,NA,NA,Both,twining,twining,scrambling,NA,NA,NA,-79.8481892780729,9.15288443295571,completed,remained infested,Non-lateral,1
+252,74,001989,Alseis blackiana,3811,001989,5,NA,NA,01380372,01380362,NA,NA,NA,Both,NA,NA,NA,NA,NA,scrambling,-79.8482149779748,9.15310704443457,completed,remained uninfested,Non-lateral,1
+375,74,002170,Trichilia tuberculata,3711,002170,20,NA,NA,22130,01370322,NA,NA,NA,Direct,NA,NA,NA,NA,NA,twining,-79.8484135272122,9.15313127656979,completed,remained infested,Non-lateral,0
+253,74,002171,Alseis blackiana,3711,002171,5,NA,NA,01370326,NA,NA,NA,NA,Both,prehensile_branches,adhesive_roots,adhesive_roots,NA,NA,NA,-79.848431388415,9.15306494704891,completed,gained infestation,Non-lateral,1
+673,72,002326,Alseis blackiana,3612,002326,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.848664728505,9.15323610095579,completed,remained infested,Lateral,1
+380,72,002342,Alseis blackiana,3613,002342,25,NA,NA,22407,NA,NA,NA,NA,Both,twining,tendrils,adhesive_roots,NA,NA,NA,-79.8485504421396,9.15347727630176,completed,remained infested,Non-lateral,1
+421,69,002470,Alseis blackiana,3516,002470,55,NA,NA,01350664,NA,NA,NA,NA,Both,tendrils,adhesive_roots,adhesive_roots,adhesive_roots,adhesive_roots,NA,-79.848756322528,9.1541089548891,completed,remained infested,Non-lateral,1
+589,69,002471,Prioria copaifera,3516,002471,100,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8487289050472,9.15398491662151,completed,gained infestation,Lateral,1
+672,72,002497,Alseis blackiana,3513,002497,0,NA,NA,22087,NA,NA,NA,NA,Both,twining,twining,hooks,NA,NA,NA,-79.8488322023217,9.15346645286788,completed,remained uninfested,Non-lateral,1
+226,72,002507,Virola sebifera,3512,002507,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8487116987162,9.15337350116138,completed,remained infested,Lateral,1
+443,68,002680,Alseis blackiana,3414,002680,80,NA,NA,NA,NA,NA,NA,NA,Both,twining,adhesive_roots,NA,NA,NA,NA,-79.8489353989849,9.15368638207116,completed,remained infested,Non-lateral,1
+379,68,002681,Alseis blackiana,3414,002681,25,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8489421246715,9.15375267777482,completed,remained infested,Lateral,1
+200,68,002683,Trichilia tuberculata,3414,002683,0,NA,NA,20355,NA,NA,NA,NA,Both,twining,twining,twining,twining,NA,NA,-79.8489342257852,9.1535922313663,completed,gained infestation,Non-lateral,1
+392,68,002685,Gustavia superba,3415,002685,35,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8490026046463,9.15381816463609,completed,remained infested,Lateral,1
+556,69,002690,Guarea guidonia,3416,002690,100,broken crown,NA,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.8488282964469,9.15408254997824,completed,remained infested,Non-lateral,1
+268,69,002698,Gustavia superba,3417,002698,5,broken crown,NA,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,adhesive_roots,-79.8488621782044,9.15420410230363,completed,gained infestation,Non-lateral,1
+490,68,002846,Apeiba membranacea,3314,002846,95,NA,NA,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,scrambling,-79.8490792857373,9.15373672732341,completed,remained infested,Non-lateral,1
+408,65,002858,Ormosia macrocalyx,3312,002858,50,NA,NA,01330228,01330230,NA,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.8490678672517,9.15329382774396,completed,remained infested,Non-lateral,1
+768,65,002860,Gustavia superba,3311,002860,0,NA,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,NA,NA,NA,NA,NA,-79.8492122031616,9.15320483500949,completed,remained infested,Non-lateral,0
+522,64,003115,Alseis blackiana,3223,003115,100,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8491518453577,9.15534277854563,completed,lost infestation,Lateral,1
+523,64,003120,Alseis blackiana,3224,003120,100,NA,NA,01320758,01320770,NA,NA,NA,Both,prehensile_branches,scrambling,adhesive_roots,scrambling,NA,NA,-79.8492924855986,9.15540748821494,completed,remained infested,Non-lateral,1
+467,64,003135,Alseis blackiana,3124,003135,90,NA,Many species present and lots of tendrils,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,adhesive_roots,-79.8494843486753,9.1555418802026,completed,remained infested,Non-lateral,1
+524,64,003145,Alseis blackiana,3123,003145,100,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8493662121306,9.15535761767537,completed,remained infested,Lateral,1
+518,59,003551,Alseis blackiana,2913,003551,100,NA,NA,01290333,01290296,01290332,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.8499145590514,9.15360255193791,completed,lost infestation,Non-lateral,1
+668,59,003554,Alseis blackiana,2913,003554,0,NA,NA,NA,NA,NA,NA,NA,Both,prehensile_branches,tendrils,adhesive_roots,NA,NA,NA,-79.8498392676541,9.15351844153213,completed,lost infestation,Non-lateral,1
+664,58,003600,Alseis blackiana,2906,003600,0,NA,Very low levels of infestation in crown,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,NA,-79.849934152206,9.15229566826415,completed,remained uninfested,Non-lateral,1
+666,58,003612,Alseis blackiana,2905,003612,0,NA,NA,NA,NA,NA,NA,NA,Both,adhesive_roots,twining,NA,NA,NA,NA,-79.8499102669009,9.15199711012365,completed,gained infestation,Non-lateral,1
+766,58,003685,Gustavia superba,2805,003685,0,NA,Twining around small tree next to it then onto main tree,NA,NA,NA,NA,NA,Direct,twining,NA,NA,NA,NA,NA,-79.8500091058367,9.15208476929372,completed,lost infestation,Non-lateral,0
+667,59,003731,Alseis blackiana,2812,003731,0,NA,NA,NA,NA,NA,NA,NA,Direct,twining,adhesive_roots,scrambling,NA,NA,NA,-79.849976129581,9.15335860164122,completed,remained uninfested,Non-lateral,0
+339,59,003734,Tetragastris panamensis,2812,003734,10,NA,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,twining,NA,NA,NA,NA,-79.8499586214161,9.15331364144857,completed,gained infestation,Non-lateral,0
+458,59,003738,Quararibea asterolepis,2813,003738,80,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8499770773036,9.15348441653974,completed,remained infested,Lateral,1
+482,59,003744,Quararibea asterolepis,2813,003744,90,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8500347608229,9.15347560188002,completed,remained infested,Lateral,1
+391,51,004350,Prioria copaifera,2408,004350,30,NA,NA,NA,NA,NA,NA,NA,Both,prehensile_branches,prehensile_branches,prehensile_branches,scrambling,NA,NA,-79.8508405720906,9.15258931373604,completed,remained infested,Non-lateral,1
+599,51,004352,Quararibea asterolepis,2408,004352,100,broken crown,NA,01240267,NA,NA,NA,NA,Both,twining,scrambling,prehensile_branches,twining,scrambling,NA,-79.8507370277794,9.15260736170564,completed,remained infested,Non-lateral,1
+104,49,004521,Quararibea asterolepis,2317,004521,0,sub:correcto(1,NA,NA,NA,NA,NA,NA,Direct,prehensile_branches,NA,NA,NA,NA,NA,-79.8509870657539,9.15424142107725,completed,gained infestation,Non-lateral,0
+251,49,004528,Alseis blackiana,2316,004528,5,sub:correcto(1,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8510074880536,9.15407835860974,completed,remained infested,Lateral,1
+374,49,004726,Trichilia tuberculata,2216,004726,20,NA,Not much of the crown left/ stubby,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,scrambling,-79.8511053199779,9.1541433594039,completed,remained infested,Non-lateral,1
+338,49,004728,Tetragastris panamensis,2216,004728,10,NA,"Looks like there was a tree fall next to it where that tree was highly infested, so there’s a massive mass of dead lianas next to focal tree.",NA,NA,NA,NA,NA,Direct,NA,NA,NA,NA,NA,scrambling,-79.8511496230911,9.15415216872584,completed,remained infested,Non-lateral,0
+367,36,005215,Prioria copaifera,1908,005215,20,NA,Tree coming out of a huge,NA,NA,NA,NA,NA,Both,adhesive_roots,adhesive_roots,NA,NA,NA,NA,-79.8517093372935,9.15263820466367,completed,gained infestation,Non-lateral,1
+194,36,005219,Trichilia tuberculata,1907,005219,0,NA,NA,NA,NA,NA,NA,NA,Both,adhesive_roots,NA,NA,NA,NA,NA,-79.8516198534131,9.15256897584607,completed,gained infestation,Non-lateral,1
+12,36,005223,Tetragastris panamensis,1907,005223,25,NA,NA,01190240,NA,NA,NA,NA,Both,twining,scrambling,scrambling,NA,NA,NA,-79.8516888341454,9.15244835418413,completed,remained infested,Non-lateral,1
+515,36,005316,Alseis blackiana,1807,005316,100,broken crown,NA,12823,180242,NA,NA,NA,Both,NA,NA,NA,NA,NA,scrambling,-79.8519469857036,9.15253713514402,completed,remained infested,Non-lateral,1
+7,36,005319,Prioria copaifera,1808,005319,25,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8518218476896,9.15264943165226,completed,gained infestation,Lateral,1
+371,36,005322,Tetragastris panamensis,1808,005322,20,NA,NA,12849,NA,NA,NA,NA,Both,twining,NA,NA,NA,NA,NA,-79.851963520993,9.15260920818583,completed,remained infested,Non-lateral,1
+588,31,005537,Prioria copaifera,1708,005537,100,NA,NA,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,prehensile_branches,-79.851976228561,9.15276258662267,completed,remained infested,Non-lateral,1
+620,31,005538,Tetragastris panamensis,1708,005538,100,NA,NA,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,adhesive_roots,-79.8519967847097,9.15269725743132,completed,remained infested,Non-lateral,1
+431,31,005540,Alseis blackiana,1708,005540,75,NA,NA,NA,NA,NA,NA,NA,Both,adhesive_roots,adhesive_roots,NA,NA,NA,NA,-79.8520077603258,9.15264516222161,completed,remained infested,Non-lateral,1
+598,28,005636,Quararibea asterolepis,1604,005636,100,NA,NA,01150215,NA,NA,NA,NA,Both,twining,NA,NA,NA,NA,NA,-79.8523414889455,9.15202356130713,completed,remained infested,Non-lateral,1
+26,28,005885,Jacaranda copaia,1505,005885,0,NA,NA,NA,NA,NA,NA,NA,Both,twining,NA,NA,NA,NA,NA,-79.8523594561494,9.15213188121089,completed,gained infestation,Non-lateral,1
+345,28,005891,Alseis blackiana,1504,005891,15,NA,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,NA,NA,NA,NA,NA,-79.8523929992422,9.15198376169835,completed,gained infestation,Non-lateral,0
+301,28,005892,Tabernaemontana arborea,1504,005892,5,NA,NA,NA,NA,NA,NA,NA,Both,tendrils,prehensile_branches,NA,NA,NA,NA,-79.8524144707741,9.15201981424099,completed,remained infested,Non-lateral,1
+648,28,005894,Virola surinamensis,1504,005894,100,NA,NA,NA,NA,NA,NA,NA,Direct,twining,adhesive_roots,NA,NA,NA,NA,-79.8523999468126,9.15191704528387,completed,remained infested,Non-lateral,0
+250,28,005895,Alseis blackiana,1504,005895,5,NA,One twining one is tag ID,01150208,NA,NA,NA,NA,Both,adhesive_roots,twining,twining,tendrils,NA,NA,-79.8524640937104,9.151905745548,completed,gained infestation,Non-lateral,1
+455,23,005943,Prioria copaifera,1404,005943,80,NA,Crown is very highly infested,NA,NA,NA,NA,NA,Both,adhesive_roots,scrambling,scrambling,NA,NA,NA,-79.8526150600855,9.1519364333629,completed,remained infested,Non-lateral,1
+412,23,005945,Quararibea asterolepis,1404,005945,50,NA,NA,NA,NA,NA,NA,NA,Both,prehensile_branches,twining,prehensile_branches,NA,NA,NA,-79.8526835952534,9.15200582460261,completed,remained infested,Non-lateral,1
+366,23,005953,Prioria copaifera,1405,005953,20,NA,Tag appeared to be swallowed by tree so doublecheck this is the correct one.,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,prehensile_branches,-79.8526576195686,9.15217140498365,completed,remained infested,Non-lateral,1
+158,24,005986,Tabernaemontana arborea,1410,005986,0,NA,NA,NA,NA,NA,NA,NA,Direct,scrambling,prehensile_branches,adhesive_roots,NA,NA,NA,-79.8525754255168,9.15304081423944,completed,gained infestation,Non-lateral,0
+331,24,005993,Prioria copaifera,1411,005993,10,sub:correcto(1,NA,NA,NA,NA,NA,NA,Direct,prehensile_branches,scrambling,adhesive_roots,NA,NA,NA,-79.8526436741222,9.15321968841849,completed,remained infested,Non-lateral,0
+619,24,006185,Tetragastris panamensis,1311,006185,100,NA,NA,01130492,01130468,NA,NA,NA,Both,twining,twining,scrambling,scrambling,NA,NA,-79.8527768421765,9.15323888663495,completed,remained infested,Non-lateral,1
+303,24,006190,Tetragastris panamensis,1310,006190,5,NA,NA,01130451,NA,NA,NA,NA,Both,scrambling,NA,NA,NA,NA,NA,-79.8527177851331,9.15305762321902,completed,remained infested,Non-lateral,1
+657,19,006561,Alseis blackiana,1107,006561,0,NA,NA,07586,NA,NA,NA,NA,Direct,twining,adhesive_roots,NA,NA,NA,NA,-79.8532328207265,9.15256008400528,completed,gained infestation,Non-lateral,0
+100,19,006562,Quararibea asterolepis,1107,006562,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8531114448569,9.15256754619842,completed,gained infestation,Lateral,1
+511,19,006707,Alseis blackiana,1007,006707,100,NA,NA,NA,NA,NA,NA,NA,Both,scrambling,NA,NA,NA,NA,NA,-79.8533987557292,9.15250352689054,completed,remained infested,Non-lateral,1
+658,20,006745,Alseis blackiana,1014,006745,0,NA,Very low levels of infestation in crown,NA,NA,NA,NA,NA,Both,adhesive_roots,NA,NA,NA,NA,NA,-79.8533097614306,9.15374008414629,completed,remained uninfested,Non-lateral,1
+751,20,006750,Guarea guidonia,1014,006750,0,NA,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,NA,NA,NA,NA,NA,-79.8533660534596,9.15382080486317,completed,gained infestation,Non-lateral,0
+79,11,007344,Prioria copaifera,605,007344,0,NA,Very low levels of infestation in crown,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8540330022524,9.15223643539341,completed,gained infestation,Lateral,1
+478,11,007594,Prioria copaifera,506,007594,90,NA,NA,NA,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.8541890477021,9.15248085827922,completed,remained infested,Non-lateral,1
+340,11,007598,Trichilia tuberculata,506,007598,10,NA,NA,NA,NA,NA,NA,NA,Both,twining,twining,adhesive_roots,adhesive_roots,scrambling,NA,-79.8543047668803,9.15237727618758,completed,gained infestation,Non-lateral,1
+402,1,008205,Aspidosperma spruceanum,121,008205,50,NA,Shares many lianas with neighboring tree which it is very close to. Crown hard to see.,01010954,01010929,01011190,01010930,40931,Both,NA,NA,NA,NA,NA,scrambling,-79.8549192145347,9.155225049026,completed,remained infested,Non-lateral,1
+654,1,008209,Alseis blackiana,121,008209,0,broken crown,NA,NA,NA,NA,NA,NA,Direct,adhesive_roots,adhesive_roots,NA,NA,NA,NA,-79.8548397980737,9.15515436712925,completed,remained infested,Non-lateral,0
+623,1,008517,Trichilia tuberculata,21,008517,100,NA,NA,01001104,NA,NA,NA,NA,Direct,twining,scrambling,adhesive_roots,NA,NA,NA,-79.8550200621034,9.15518066287534,completed,remained infested,Non-lateral,0
+415,94,028236,Quararibea asterolepis,4617,028236,50,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8468010809216,9.1541400761954,completed,remained infested,Lateral,1
+316,59,043966,Virola sebifera,2912,043966,5,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8498640746307,9.15336005877886,completed,remained infested,Lateral,1
+118,77,057063,Quararibea asterolepis,4020,057063,0,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8477452183701,9.15465133755818,completed,remained uninfested,Lateral,1
+18,77,063940,Trichilia tuberculata,3920,063940,25,NA,NA,01390813,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.8479946005744,9.15473076057328,completed,remained infested,Non-lateral,1
+332,72,077147,Prioria copaifera,3613,077147,10,NA,NA,NA,NA,NA,NA,NA,Both,twining,twining,hooks,NA,NA,NA,-79.8486242971307,9.15339845430869,completed,remained infested,Non-lateral,1
+533,69,082615,Apeiba membranacea,3516,082615,100,broken crown,NA,21892,NA,NA,NA,NA,Both,NA,NA,NA,NA,NA,prehensile_branches,-79.848800884356,9.15408519729833,completed,remained infested,Non-lateral,1
+376,68,087425,Virola sebifera,3414,087425,20,NA,NA,NA,NA,NA,NA,NA,Both,adhesive_roots,NA,NA,NA,NA,NA,-79.8490127978298,9.15368641133806,completed,remained infested,Non-lateral,1
+377,69,087943,Alchornea costaricensis,3416,087943,25,NA,Many Liana‘s twining around other Liana‘s.,01350632,01340557,01350631,NA,NA,Both,NA,NA,NA,NA,NA,twining,-79.848840568332,9.15394363083021,completed,remained infested,Non-lateral,1
+413,65,092320,Quararibea asterolepis,3311,092320,50,NA,NA,16379,NA,NA,NA,NA,Both,scrambling,twining,scrambling,NA,NA,NA,-79.8490917983708,9.15313450923562,completed,remained infested,Non-lateral,1
+390,64,099474,Alseis blackiana,3223,099474,30,NA,Tree leaning significantly and Liana roots hanging off,NA,NA,NA,NA,NA,Both,adhesive_roots,NA,NA,NA,NA,NA,-79.8492932285053,9.15531068976801,completed,gained infestation,Non-lateral,1
+635,64,099492,Trichilia tuberculata,3223,099492,100,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8492666949668,9.1553649485529,completed,remained infested,Lateral,1
+400,64,099532,Alseis blackiana,3223,099532,50,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.849277733465,9.15526037134478,completed,lost infestation,Lateral,1
+466,64,099837,Alseis blackiana,3224,099837,90,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8491436967398,9.15544293379068,completed,lost infestation,Lateral,1
+558,64,104694,Gustavia superba,3123,104694,100,NA,NA,01310870,NA,NA,NA,NA,Both,NA,NA,NA,NA,scrambling,NA,-79.8493330813646,9.1553166273716,completed,remained infested,Non-lateral,1
+272,51,141568,Heisteria concinna,2408,141568,5,NA,NA,01240262,NA,NA,NA,NA,Direct,prehensile_branches,prehensile_branches,prehensile_branches,prehensile_branches,prehensile_branches,NA,-79.8508680865895,9.15268530320432,completed,remained infested,Non-lateral,0
+86,51,146718,Prioria copaifera,2309,146718,0,NA,NA,NA,NA,NA,NA,NA,Direct,NA,NA,NA,NA,NA,adhesive_roots,-79.850908988681,9.15291569272205,completed,remained infested,Non-lateral,0
+294,36,171109,Quararibea asterolepis,1807,171109,5,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8518461695759,9.15255527978598,completed,gained infestation,Lateral,1
+280,28,180870,Jacaranda copaia,1604,180870,5,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8522941019159,9.15202459718241,completed,gained infestation,Lateral,1
+514,31,181662,Alseis blackiana,1608,181662,100,NA,NA,NA,NA,NA,NA,NA,Both,scrambling,scrambling,NA,NA,NA,NA,-79.8522349244982,9.15268397998251,completed,remained infested,Non-lateral,1
+628,31,181738,Trichilia tuberculata,1608,181738,100,NA,NA,10079,01160482,01160484,01160486,01160483,Both,NA,NA,NA,NA,NA,twining,-79.8521610982532,9.15268588854373,completed,remained infested,Non-lateral,1
+597,23,197469,Quararibea asterolepis,1305,197469,100,NA,NA,01130230,01130232,NA,NA,NA,Both,twining,twining,NA,NA,NA,NA,-79.8527388155922,9.15211636969199,completed,remained infested,Non-lateral,1
+585,19,206247,Prioria copaifera,1107,206247,100,NA,NA,03110,NA,NA,NA,NA,Both,scrambling,twining,prehensile_branches,twining,twining,NA,-79.8531414234346,9.15256951329425,completed,remained infested,Non-lateral,1
+22,19,206350,Jacaranda copaia,1108,206350,0,NA,NA,NA,NA,NA,NA,NA,Direct,scrambling,NA,NA,NA,NA,NA,-79.8532183129347,9.15276136273146,completed,gained infestation,Non-lateral,0
+185,20,213134,Trichilia tuberculata,1015,213134,0,NA,NA,NA,NA,NA,NA,NA,Both,adhesive_roots,NA,NA,NA,NA,NA,-79.853206583632,9.15392555100094,completed,gained infestation,Non-lateral,1
+315,1,258702,Virola sebifera,121,258702,5,NA,NA,01010923,NA,NA,NA,NA,Both,scrambling,twining,adhesive_roots,NA,NA,NA,-79.8549573731713,9.1551259570789,completed,remained infested,Non-lateral,1
+500,1,263675,Virola sebifera,21,263675,95,NA,NA,01001093,NA,NA,NA,NA,Direct,twining,scrambling,prehensile_branches,adhesive_roots,adhesive_roots,NA,-79.8550485746306,9.15509661226329,completed,remained infested,Non-lateral,0
+3,69,435304,Miconia argentea,3516,435304,25,NA,NA,NA,NA,NA,NA,NA,Lateral,NA,NA,NA,NA,NA,NA,-79.8487648942524,9.15402238884746,completed,remained infested,Lateral,1

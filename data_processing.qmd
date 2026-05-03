@@ -1,0 +1,1227 @@
+---
+title: "Data Processing Pipeline"
+subtitle: "BCI 50-ha Plot — Tree Architecture × Liana Infestation"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    theme: cosmo
+    embed-resources: true
+execute:
+  eval: false       # code shown but not run — paths are placeholders
+  warning: false
+  message: false
+---
+
+## Overview
+
+This document outlines the key data processing steps that produced the
+analysis-ready datasets used in `analysis_and_figures.qmd`. It covers:
+field data cleaning and infestation-history classification; matching of
+TLS-segmented tree point clouds to the ForestGEO stem map; extraction of
+crown architecture metrics using ITSMe; and estimation of plant area index
+(PAI) via a voxel-based pipeline.
+
+This is intended as a readable record of the processing workflow for anyone
+curious about how the data were prepared — it does not constitute a
+fully self-contained reproducible pipeline. In particular, the upstream
+inputs (subplot-level TLS point clouds, the BCI dendrometer `.rdata`
+timeseries, and individual segmented tree files) are large raw data objects
+that are not included in this repository. **Raw data may be made available
+upon reasonable request.**
+
+Steps not documented here include initial point cloud co-registration
+(performed in RiSCAN Pro), individual tree segmentation (performed with
+RayCloudTools), leaf-wood separation (performed with a deep-learning
+separator), and manual quality checking and cleaning of segmented trees
+in CloudCompare.
+
+---
+
+# 1 Field Data Cleaning
+
+## 1.1 Background
+
+Liana infestation data come from annual dendrometer surveys within 100
+non-overlapping 40 × 40 m subplots nested in the BCI 50-ha ForestGEO
+plot. Surveys began in 2011 (census 8) and record liana presence on a
+five-point scale (0 = no lianas, 1–4 = 25% increments of crown covered).
+Additional field assessments of liana climbing mode and infestation
+pathway were collected in 2025 for six focal species (≥10 individuals
+each). This section cleans both datasets and builds the infestation-history
+summaries used in the main analysis.
+
+## 1.2 Setup
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(purrr)
+library(stringr)
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+# The BCI dendrometer timeseries is distributed as an .rdata file containing
+# a data frame 'bciall' with one row per tree × census visit.
+rdata_path <- # insert path to bci01to28proc.rdata (dendrometer timeseries)
+field_csv  <- # insert path to fieldwork.csv (2025 climbing-mode survey data)
+out_dir    <- # insert path to output folder for processed CSVs
+
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## 1.3 Load datasets
+
+```{r}
+#| label: load-raw
+
+# Load the BCI dendrometer .rdata into a temporary environment to avoid
+# clobbering the workspace. The object inside is named 'bciall'.
+temp_env <- new.env()
+load(rdata_path, envir = temp_env)
+if (!exists("bciall", envir = temp_env)) stop("bciall not found in .rdata.")
+bciall <- get("bciall", envir = temp_env)
+
+# Load the 2025 fieldwork survey (climbing modes, infestation pathway)
+fieldwork_raw <- read_csv(field_csv, show_col_types = FALSE) |>
+  janitor::clean_names()
+```
+
+## 1.4 Clean and deduplicate fieldwork
+
+```{r}
+#| label: clean-fieldwork
+
+# Helper: normalise any tree tag to a zero-padded 6-digit character string.
+# This ensures reliable joining between datasets that store tags as integers,
+# raw strings, or 7-digit formats.
+tag6_from <- function(x) {
+  xnum <- suppressWarnings(as.integer(x))
+  ifelse(is.na(xnum), NA_character_, sprintf("%06d", xnum))
+}
+
+fieldwork <- fieldwork_raw |>
+  mutate(
+    priority = if_else(is.na(priority), NA_character_,
+                       str_to_lower(str_squish(priority))),
+    tag6 = tag6_from(tag)
+  ) |>
+  # Normalise adhesive-root spelling variants to a single canonical form
+  mutate(across(any_of(c("mode_l1", "five_plus")), ~ {
+    v  <- as.character(.)
+    v2 <- ifelse(is.na(v), NA_character_, tolower(str_squish(v)))
+    ifelse(!is.na(v2) & v2 %in% c("adhesive roots","adhesive_roots","adhesive-roots"),
+           "adhesive_roots", v)
+  }))
+
+# When a tree appears more than once (e.g. two survey visits), keep the
+# most informative row: priority = "completed" first, then most non-NA fields.
+resolve_duplicates <- function(df, by = "tag6",
+                               prefer_col = "priority",
+                               prefer_val = "completed") {
+  df |>
+    mutate(.non_na_count = rowSums(!is.na(select(., -all_of(by))))) |>
+    group_by(across(all_of(by))) |>
+    arrange(desc((!!sym(prefer_col)) == prefer_val), desc(.non_na_count)) |>
+    slice_head(n = 1) |>
+    ungroup() |>
+    select(-.non_na_count)
+}
+
+fieldwork_dedup <- resolve_duplicates(fieldwork, by = "tag6")
+message("Fieldwork rows: ", nrow(fieldwork), " → after dedup: ",
+        nrow(fieldwork_dedup))
+
+# Build the cleaned fieldwork table with standardised column names.
+# lianas_2019 holds the field-measured liana cover score for 2019;
+# infestation_type, mode columns, and notes are retained for H2b analyses.
+fieldwork_clean_v2 <- fieldwork_dedup |>
+  transmute(
+    fid, sbpltnm, tag, species, quadrnt, tag6,
+    lianas_2019      = coalesce(lianas, NA_real_),
+    notes_2019       = nota,
+    notes_2025       = notes_lian,
+    liana_tag_1 = tag_1, liana_tag_2 = tag_2, liana_tag_3 = tag_3,
+    liana_tag_4 = tag_4, liana_tag_5 = tag_5,
+    infestation_type,
+    mode_l1, mode_l2, mode_l3, mode_l4, mode_l5,
+    five_plus, x, y, priority
+  ) |>
+  mutate(lianas_2019 = as.numeric(lianas_2019))
+
+write_csv(fieldwork_clean_v2, file.path(out_dir, "fieldwork_clean_v2.csv"))
+```
+
+## 1.5 Build annual liana timeseries (wide format)
+
+```{r}
+#| label: liana-wide
+
+# Standardise the dendrometer tags and find trees present in both datasets.
+bciall2 <- bciall |>
+  mutate(tag6 = if_else(!is.na(tag),
+                        sprintf("%06d", as.integer(tag)), NA_character_))
+
+# Keep only the dendrometer records for trees that also appear in the
+# fieldwork survey — this restricts to the study's focal trees.
+bciall_overlap <- bciall2 |>
+  filter(!is.na(tag6)) |>
+  semi_join(fieldwork_clean_v2 |> filter(!is.na(tag6)) |> distinct(tag6),
+            by = "tag6")
+
+# Pivot to wide format: one row per tree, columns lianas_2011 … lianas_2024.
+# Where multiple records exist for a single tree × year, the most recent
+# non-NA liana score is retained.
+yrs   <- 2011:2024L
+lcols <- paste0("lianas_", yrs)
+
+bciall_wide <- bciall_overlap |>
+  mutate(tag6 = as.character(tag6), date = as.Date(date),
+         year = year(date), lianas = as.numeric(lianas)) |>
+  filter(!is.na(tag6), year %in% yrs) |>
+  arrange(tag6, year, desc(date)) |>
+  group_by(tag6, species, year) |>
+  summarise(
+    lianas = { v <- lianas; idx <- which(!is.na(v))
+               if (length(idx)) v[idx[1]] else NA_real_ },
+    .groups = "drop") |>
+  pivot_wider(id_cols = c(tag6, species),
+              names_from = year, values_from = lianas,
+              names_prefix = "lianas_")
+
+# Ensure all year columns exist even if no data for that year
+for (col in lcols)
+  if (!col %in% names(bciall_wide)) bciall_wide[[col]] <- NA_real_
+bciall_wide <- bciall_wide |> mutate(across(all_of(lcols), as.numeric))
+
+# Where the dendrometer lacks a 2019 score, fill using the 2025 field
+# assessment. The field records liana cover as a percentage (0–100); this
+# is rescaled to the 0–4 dendrometer scale by dividing by 25 and rounding.
+field_2019_pct <- fieldwork_clean_v2 |>
+  filter(!is.na(tag6)) |>
+  distinct(tag6, .keep_all = TRUE) |>
+  transmute(tag6, lianas_2019_field_pct = as.numeric(lianas_2019))
+
+bciall_wide_filled <- bciall_wide |>
+  left_join(field_2019_pct, by = "tag6") |>
+  rename(lianas_2019_dendro = lianas_2019) |>
+  mutate(
+    lianas_2019 = case_when(
+      !is.na(lianas_2019_dendro) ~ as.numeric(lianas_2019_dendro),
+      !is.na(lianas_2019_field_pct) ~
+        pmin(4, pmax(0, round(lianas_2019_field_pct / 25))),
+      TRUE ~ NA_real_
+    )
+  ) |>
+  select(-lianas_2019_dendro, -lianas_2019_field_pct)
+```
+
+## 1.6 Assign infestation-history categories (H1_category)
+
+```{r}
+#| label: infestation-histories
+
+# For H1, trees are classified based on their liana record spanning 2011–2019.
+# The classification uses two temporal windows:
+#   - up19: 2011–2019 (determines current infestation status)
+#   - pre:  2011–2018 (determines data sufficiency and "last lost" year)
+#
+# Categories:
+#   Persistently infested — infested in 2019, first infestation ≤ 2015
+#   Recently infested     — infested in 2019, first infestation ≥ 2016
+#   Lost lianas (recently lost 2016–2018) — not infested in 2019, last infested ≥ 2016
+#   Lost lianas (before 2016)             — not infested in 2019, last infested ≤ 2015
+#   Never infested        — no infestation record in 2011–2019, ≥1 pre-2019 survey
+#   other/uncertain       — insufficient temporal coverage to classify
+
+build_histories <- function(df, yrs = 2011:2024) {
+  lcols <- paste0("lianas_", yrs)
+  pre   <- 2011:2018
+  up19  <- 2011:2019
+
+  df |>
+    mutate(.vals = pmap(list(!!!syms(lcols)), ~ c(...))) |>
+    transmute(
+      tag6, species, across(all_of(lcols)),
+      rec_years_vec  = map(.vals, ~ up19[!is.na(.x[yrs %in% up19])]),
+      inf_years_vec  = map(.vals, ~ up19[!is.na(.x[yrs %in% up19]) &
+                                           .x[yrs %in% up19] != 0]),
+      infested_2019  = map_lgl(.vals, ~ any(!is.na(.x) & .x != 0 &
+                                              yrs == 2019)),
+      n_rec_pre      = map_int(.vals, ~ sum(!is.na(.x[yrs %in% pre]))),
+      any_inf_up19   = map_lgl(inf_years_vec, ~ length(.x) > 0),
+      first_inf_u19  = map_int(inf_years_vec, ~ if (length(.x)) min(.x)
+                                                else NA_integer_),
+      last_inf_pre19 = map_int(.vals, ~ {
+        y <- pre[!is.na(.x[yrs %in% pre]) & .x[yrs %in% pre] != 0]
+        if (length(y)) max(y) else NA_integer_
+      }),
+      recorded_years = map_chr(rec_years_vec,
+                                ~ if (length(.x)) paste(.x, collapse = ";")
+                                  else NA_character_),
+      infested_years = map_chr(inf_years_vec,
+                                ~ if (length(.x)) paste(.x, collapse = ";")
+                                  else NA_character_)
+    ) |>
+    mutate(
+      data_poor   = (n_rec_pre < 2) | recorded_years %in% c("2019","2019;2024"),
+      H1_category = case_when(
+        data_poor ~ "other/uncertain",
+        infested_2019 & !is.na(first_inf_u19) & first_inf_u19 >= 2016 ~
+          "Recently infested",
+        infested_2019 & !is.na(first_inf_u19) & first_inf_u19 <= 2015 ~
+          "Persistently infested",
+        !infested_2019 & !is.na(last_inf_pre19) & last_inf_pre19 %in% 2016:2018 ~
+          "Lost lianas (recently lost 2016\u20132018)",
+        !infested_2019 & !is.na(last_inf_pre19) & last_inf_pre19 <= 2015 ~
+          "Lost lianas (before 2016)",
+        !any_inf_up19 & n_rec_pre > 0 ~ "Never infested",
+        TRUE ~ "other/uncertain"
+      )
+    ) |>
+    select(tag6, species, all_of(lcols),
+           recorded_years, infested_years,
+           first_inf = first_inf_u19,
+           last_inf  = last_inf_pre19,
+           H1_category)
+}
+
+bciall_infestation_histories <- build_histories(bciall_wide_filled, yrs)
+
+message("H1 category distribution:")
+print(count(bciall_infestation_histories, H1_category, sort = TRUE))
+
+write_csv(bciall_infestation_histories,
+          file.path(out_dir, "bciall_infestation_histories.csv"))
+```
+
+## 1.7 Build the focal-tree master table
+
+```{r}
+#| label: master-table
+
+# Merge infestation histories with dendrometer metadata, fieldwork records,
+# and TLS-derived XY coordinates to produce the all_info_focal_trees table.
+# This is the primary input for the ITSMe metric extraction step below.
+
+# One dendrometer row per tree (most recent visit)
+dendro_latest <- bciall2 |>
+  filter(!is.na(tag6)) |>
+  arrange(tag6, desc(date)) |>
+  group_by(tag6) |>
+  slice_head(n = 1) |>
+  ungroup() |>
+  select(tag6, calc.dbh, dendroDiam, dendroHt, paintDiam, paintHt,
+         crown, illumination, DendroID, measure, date)
+
+# TLS-aligned coordinates produced by the ply-matching step (section 2)
+tls_all_with_aligned_coords <- read_csv(
+  # insert path to tls_all_with_aligned_coords.csv
+  show_col_types = FALSE)
+
+tls_keep <- tls_all_with_aligned_coords |>
+  mutate(tag = as.character(tag)) |>
+  select(tag, px, py, fid, quadrnt, x_aligned, y_aligned) |>
+  distinct(tag, .keep_all = TRUE)
+
+# Join everything onto the infestation histories table.
+# The 'full' version (all_info_focal_trees2) retains all overlapping trees
+# regardless of species; the filtered version restricts to focal species
+# with ≥10 individuals for H2b analyses.
+bciall_histories_full <- build_histories(bciall_wide_filled, yrs = 2011:2024)
+
+all_info_focal_trees <- bciall_histories_full |>
+  rename(species_code = species) |>
+  left_join(dendro_latest, by = "tag6") |>
+  left_join(fieldwork_clean_v2 |>
+              mutate(tag6 = if_else(!is.na(tag),
+                                    sprintf("%06d", as.integer(tag)), tag6)),
+            by = "tag6", suffix = c("", "_field")) |>
+  mutate(tag = coalesce(as.character(tag), tag6)) |>
+  left_join(tls_keep, by = "tag", suffix = c("", "_tls")) |>
+  relocate(tag6, tag, species_code, species, .before = everything())
+
+message("all_info_focal_trees: ", nrow(all_info_focal_trees),
+        " rows, ", n_distinct(all_info_focal_trees$tag6), " unique trees")
+
+write_csv(all_info_focal_trees, file.path(out_dir, "all_info_focal_trees.csv"))
+```
+
+---
+
+# 2 TLS Post-Processing — PLY Matching Algorithm
+
+## 2.1 Background
+
+Following individual tree segmentation with RayCloudTools, each detected
+object is output as a `.ply` file within a subplot-level folder. To link
+these objects to known ForestGEO stem identities, a nearest-neighbour
+matching algorithm is applied: the 2D centroid of each `.ply` point cloud
+is compared against the georeferenced stem-map coordinates derived from
+manual alignment in CloudCompare (translation, rotation, and scale
+computed using a subset of large landmark trees as control points per
+subplot). Objects with a vertical extent < 10 m are excluded before
+matching to remove understorey shrubs and segmentation artefacts. The
+four nearest stem-map candidates are retained for each object, and the
+correct match is subsequently confirmed manually against DBH and species
+identity. This section shows the matching algorithm for a single subplot;
+the same code is run for each of the 24 scanned subplots.
+
+## 2.2 PLY matching
+
+```{r}
+#| label: ply-matching
+
+library(dplyr)
+library(readr)
+library(stringr)
+library(RANN)
+library(Rvcg)
+
+# ── Paths (update for each subplot) ───────────────────────────────────────────
+# Folder containing the .ply files output by RayCloudTools for this subplot
+ply_root    <- # insert path to RayCloudTools ply output folder for this subplot
+
+# Output directory for copied matched .ply files
+dst_dir     <- # insert path to output directory for matched ply files
+
+# Output directory for the matches summary CSV
+out_csv_dir <- # insert path to output directory for per-subplot summary CSVs
+
+# The stem-map table with georeferenced XY coordinates and subplot IDs
+master_file <- # insert path to final_extraction_map.csv
+
+# ── Parameters ─────────────────────────────────────────────────────────────────
+# Change to the number of the subplot being matched
+target_subplot        <- 31L           # say change to number of subplot being matched
+
+# How many nearest stem-map candidates to retain per detected object
+k_nearest             <- 4L
+
+# Minimum vertical extent (m): objects shorter than this are excluded
+# (removes understorey shrubs and segmentation noise)
+min_vertical_extent_m <- 10
+
+dir.create(dst_dir,     recursive = TRUE, showWarnings = FALSE)
+dir.create(out_csv_dir, recursive = TRUE, showWarnings = FALSE)
+
+# ── Load stem-map data ─────────────────────────────────────────────────────────
+master_df <- read_csv(master_file, show_col_types = FALSE)
+
+trees_sub <- master_df |>
+  filter(sbpltnm == target_subplot)
+
+if (nrow(trees_sub) == 0) stop("No trees found for subplot: ", target_subplot)
+
+# ── Filter PLY files by vertical extent ───────────────────────────────────────
+# Noise objects (labelled -1 by RayCloudTools) are excluded first.
+ply_files <- list.files(ply_root, pattern = "\\.ply$",
+                        full.names = TRUE, ignore.case = TRUE)
+ply_files <- ply_files[!grepl("_-1\\.ply$", basename(ply_files),
+                              ignore.case = TRUE)]
+
+message("Filtering ", length(ply_files), " files by vertical extent (≥ ",
+        min_vertical_extent_m, " m)...")
+
+filter_ply <- function(f) {
+  ply <- try(Rvcg::vcgPlyRead(f, updateNormals = FALSE), silent = TRUE)
+  if (inherits(ply, "try-error") || is.null(ply$vb)) return(FALSE)
+  z_range <- range(ply$vb[3, ], na.rm = TRUE)
+  (z_range[2] - z_range[1]) >= min_vertical_extent_m
+}
+
+keep_idx           <- vapply(ply_files, filter_ply, logical(1))
+ply_files_filtered <- ply_files[keep_idx]
+message("Retained ", length(ply_files_filtered), " candidate trees.")
+
+# ── Nearest-neighbour matching ─────────────────────────────────────────────────
+# For each retained .ply, compute the 2D distance from every tree in the
+# stem map to the closest point in the .ply point cloud. This fills a
+# distance matrix (n_trees × n_plies); rows are sorted to find the k nearest
+# .ply candidates for each stem-map entry.
+
+tree_coords <- as.matrix(trees_sub[, c("x_aligned", "y_aligned")])
+n_trees     <- nrow(tree_coords)
+n_plies     <- length(ply_files_filtered)
+
+dist_mat <- matrix(Inf, nrow = n_trees, ncol = n_plies)
+
+for (i in seq_along(ply_files_filtered)) {
+  ply <- Rvcg::vcgPlyRead(ply_files_filtered[i], updateNormals = FALSE)
+  pts <- t(ply$vb[1:2, ])                    # XY only
+  nn  <- RANN::nn2(data = pts, query = tree_coords, k = 1)
+  dist_mat[, i] <- nn$nn.dists[, 1]
+}
+
+# ── Compile results ────────────────────────────────────────────────────────────
+file_names  <- basename(ply_files_filtered)
+k_use       <- min(k_nearest, n_plies)
+
+# For each stem-map tree, record the k nearest .ply files and their distances
+match_indices <- t(apply(dist_mat, 1, function(x) order(x)[1:k_use]))
+
+results_list <- lapply(1:k_use, function(k) {
+  tibble(
+    !!paste0("nearest", k, "_ply")    := file_names[match_indices[, k]],
+    !!paste0("nearest", k, "_dist_m") := vapply(
+      1:n_trees, function(r) dist_mat[r, match_indices[r, k]], numeric(1))
+  )
+})
+
+final_df <- bind_cols(trees_sub, bind_cols(results_list))
+
+# Save and copy matched files
+out_matches_csv <- file.path(out_csv_dir,
+                              paste0("subplot", target_subplot, "_matches.csv"))
+write_csv(final_df, out_matches_csv)
+
+selected_plies <- unique(na.omit(as.character(
+  unlist(final_df[, grep("_ply$", names(final_df))]))))
+src_paths <- ply_files_filtered[basename(ply_files_filtered) %in% selected_plies]
+file.copy(from = src_paths, to = dst_dir, overwrite = TRUE)
+
+message("Done. Matches CSV saved to: ", out_matches_csv)
+```
+
+---
+
+# 3 Crown Architecture Metric Extraction
+
+## 3.1 Background
+
+Crown metrics — height, crown depth, projected area, and crown volume —
+were extracted from each segmented individual tree point cloud using the
+ITSMe R package (Terryn et al., 2023). The crown was defined as all
+points above the first major branch, with buttress detection applied where
+relevant to prevent buttress points being incorrectly assigned to the
+crown. Projected crown area is estimated as the area enclosed by a 2D
+concave hull (alpha = 2); crown volume as the 3D alpha-shape volume
+(alpha = 1). Tree height is the vertical range of the full point cloud;
+crown depth is the vertical range of the crown points alone.
+
+The pipeline below processes new files incrementally, skipping trees
+that already have entries in the results CSV. This allows the pipeline
+to be resumed after interruption.
+
+## 3.2 ITSMe metric extraction
+
+```{r}
+#| label: itsme-extraction
+
+library(ITSMe)
+library(alphashape3d)
+library(dplyr)
+library(readr)
+
+options(rgl.useNULL = TRUE)   # suppress rgl window in non-interactive mode
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+pc_folder   <- # insert path to folder containing all individual segmented
+               # tree point clouds (.txt files, one per tree)
+results_csv <- # insert path to output CSV for ITSMe metrics
+               # (ITSMe_tree_metrics_summary_final.csv)
+
+# Helper: return NA instead of throwing for missing outputs
+safe_val <- function(x) if (length(x) == 0 || is.null(x)) NA else x
+
+# ── Identify which trees still need processing ─────────────────────────────────
+pc_files <- list.files(pc_folder, pattern = "\\.txt$", full.names = TRUE)
+pc_names <- basename(pc_files)
+
+if (file.exists(results_csv)) {
+  old_results  <- read_csv(results_csv, show_col_types = FALSE)
+  done         <- if ("filename" %in% names(old_results))
+    unique(old_results$filename) else character(0)
+  files_to_run <- pc_files[!(pc_names %in% done)]
+} else {
+  old_results  <- NULL
+  files_to_run <- pc_files
+}
+
+cat("Total trees in folder:", length(pc_files), "\n")
+cat("New trees to process:", length(files_to_run), "\n")
+if (length(files_to_run) == 0) { cat("Nothing to do.\n"); stop() }
+
+# ── Process each new tree ──────────────────────────────────────────────────────
+results_list <- vector("list", length(files_to_run))
+
+for (i in seq_along(files_to_run)) {
+  f <- files_to_run[i]
+  cat("Processing:", basename(f), "(", i, "/", length(files_to_run), ")\n")
+
+  pc_tree <- read_tree_pc(path = f)
+
+  # DBH and diameter above buttress (DAB); DAB height is used to set the
+  # crown base height where buttresses would otherwise inflate crown depth
+  out_dbh   <- dbh_pc(pc = pc_tree, plot = FALSE)
+  out_dab   <- dab_pc(pc = pc_tree, plot = FALSE)
+  buttress_h <- out_dab$h
+
+  # Full tree height
+  H_out <- tree_height_pc(pc = pc_tree)
+
+  # Crown classification: if a buttress taller than 1.5 m is detected,
+  # set the crown base accordingly; otherwise use the default algorithm
+  C_out <- if (!is.null(buttress_h) && !is.na(buttress_h) && buttress_h > 1.5)
+    classify_crown_pc(pc = pc_tree, minheight = buttress_h,
+                      buttress = TRUE, plot = FALSE)
+  else
+    classify_crown_pc(pc = pc_tree, plot = FALSE)
+
+  crown_pc   <- C_out$crownpoints
+  crownDepth <- tree_height_pc(pc = crown_pc)             # crown depth
+  pca_out    <- projected_area_pc(pc = crown_pc, plot = FALSE) # 2D alpha hull
+
+  # Alpha-shape crown volume — handle version differences in return structure
+  cvol_out <- tryCatch({
+    raw <- alpha_volume_pc(pc = crown_pc, plot = FALSE)
+    if (is.list(raw)) raw$av else raw
+  }, error = function(e) NA)
+
+  results_list[[i]] <- data.frame(
+    filename     = basename(f),
+    dbh          = safe_val(out_dbh$dbh),
+    dab          = safe_val(out_dab$dab),
+    buttress_h   = safe_val(out_dab$h),
+    height       = safe_val(H_out$h),
+    crown_depth  = safe_val(crownDepth$h),
+    pa           = safe_val(pca_out),         # projected (crown) area in m²
+    crown_vol    = safe_val(cvol_out),         # alpha-shape volume in m³
+    stringsAsFactors = FALSE
+  )
+}
+
+# ── Append to existing results, deduplicate, and save ─────────────────────────
+new_results <- do.call(rbind, results_list)
+
+if (!is.null(old_results)) {
+  all_cols <- union(names(old_results), names(new_results))
+  for (nm in setdiff(all_cols, names(old_results)))  old_results[[nm]]  <- NA
+  for (nm in setdiff(all_cols, names(new_results)))  new_results[[nm]]  <- NA
+  updated <- bind_rows(old_results[, all_cols], new_results[, all_cols])
+} else {
+  updated <- new_results
+}
+
+updated <- updated |>
+  arrange(filename) |>
+  distinct(filename, .keep_all = TRUE)
+
+write_csv(updated, results_csv)
+cat("Done. Rows in results table:", nrow(updated), "\n")
+```
+
+---
+
+# 4 Plant Area Index Estimation
+
+## 4.1 Background
+
+Plant area index (PAI) quantifies the one-sided projected area of all
+plant material per unit ground area. PAI was estimated from TLS point
+clouds using the voxel-based vertical-slicing approach of Flynn et al.
+(2023), with a voxel resolution of 0.10 m and a leaf-inclination
+correction factor of 1.1. Following leaf-wood separation applied to each
+individual tree point cloud, two PAI values were computed per tree:
+
+- **Host PAI** (tree-only): from the crown point cloud, clipped to all
+  points above the first branch. This captures host foliage density
+  independently of any associated liana material.
+- **Combined PAI** (host + liana): an alpha-shape hull (α = 100)
+  constructed around the host leaf points was used to query the
+  co-registered subplot-level point cloud, capturing all vegetation
+  within the crown volume — host foliage, host wood, and liana material.
+
+A sensitivity analysis was conducted on a stratified subsample of 60 trees
+(20 per liana load category: none, light, heavy) to confirm stability of
+PAI estimates to the choice of alpha value and voxel resolution.
+
+## 4.2 Separate leaf and wood points
+
+```{r}
+#| label: leaf-wood-separation
+
+library(data.table)
+library(fs)
+
+# Each input file contains four columns: X, Y, Z, class
+# (class 0 = leaf, class 1 = wood), output by the leaf-wood separator.
+input_tree_dir  <- # insert path to folder containing leaf-wood separated tree files
+leaf_output_dir <- # insert path to output folder for leaf points
+wood_output_dir <- # insert path to output folder for wood points
+
+dir_create(leaf_output_dir)
+dir_create(wood_output_dir)
+
+tree_files <- dir_ls(input_tree_dir, glob = "*.txt")
+message("Separating ", length(tree_files), " trees...")
+
+for (f in tree_files) {
+  tree_id  <- path_ext_remove(basename(f))
+  dat      <- fread(f, col.names = c("X", "Y", "Z", "class"))
+  leaf_pts <- dat[class == 0, .(X, Y, Z)]
+  wood_pts <- dat[class == 1, .(X, Y, Z)]
+  if (nrow(leaf_pts) > 0)
+    fwrite(leaf_pts, file.path(leaf_output_dir, paste0(tree_id, "_leaf.txt")),
+           sep = "\t", col.names = FALSE)
+  if (nrow(wood_pts) > 0)
+    fwrite(wood_pts, file.path(wood_output_dir, paste0(tree_id, "_wood.txt")),
+           sep = "\t", col.names = FALSE)
+  rm(dat, leaf_pts, wood_pts); gc()
+}
+message("Leaf-wood separation complete.")
+```
+
+## 4.3 Organise files by subplot
+
+```{r}
+#| label: organise-by-subplot
+
+library(data.table); library(fs); library(dplyr); library(readr)
+
+# Leaf and tree files are grouped into per-subplot subdirectories so that
+# each subplot's plot-level point cloud only needs to be loaded once during
+# the combined extraction step below.
+source_tree_dir    <- # insert path to folder containing all individual tree files
+target_tree_by_sub <- # insert path to output folder for subplot-organised tree files
+source_leaf_dir    <- # insert path to leaf points folder (from step 4.2)
+target_leaf_by_sub <- # insert path to output folder for subplot-organised leaf files
+metadata_csv       <- # insert path to metadata CSV with columns: Tag, Subplot number
+
+dir_create(target_tree_by_sub)
+dir_create(target_leaf_by_sub)
+
+new_trees <- read_csv(metadata_csv)
+
+# Move tree files into subplot subdirectories
+for (tf in dir_ls(source_tree_dir, glob = "*.txt")) {
+  tag_id   <- as.numeric(gsub(".*_([0-9]+)\\.txt$", "\\1", basename(tf)))
+  sub_info <- new_trees |> filter(Tag == tag_id)
+  if (nrow(sub_info) == 0) next
+  sub_folder <- file.path(target_tree_by_sub,
+                           paste0("subplot_", sub_info$`Subplot number`[1]))
+  dir_create(sub_folder)
+  file_move(tf, file.path(sub_folder, basename(tf)))
+}
+
+# Copy leaf files into subplot subdirectories (copy not move, to preserve originals)
+for (lf in dir_ls(source_leaf_dir, glob = "*.txt")) {
+  tag_id   <- as.numeric(gsub(".*_([0-9]+)_leaf\\.txt$", "\\1", basename(lf)))
+  sub_info <- new_trees |> filter(Tag == tag_id)
+  if (nrow(sub_info) == 0) next
+  sub_folder <- file.path(target_leaf_by_sub,
+                           paste0("subplot_", sub_info$`Subplot number`[1]))
+  dir_create(sub_folder)
+  file_copy(lf, file.path(sub_folder, basename(lf)), overwrite = TRUE)
+}
+message("Files organised by subplot.")
+```
+
+## 4.4 Extract combined host + liana point clouds
+
+```{r}
+#| label: combined-extraction
+
+library(data.table); library(fs); library(alphashape3d)
+
+# For each tree, an alpha-shape hull (α = 100) is fitted to the host leaf
+# points and used to query the full subplot-level point cloud. This captures
+# all plant material within the crown volume — host foliage, host wood, and
+# any liana points — providing the combined PAI input. α = 100 approximates
+# a convex hull, ensuring the entire crown volume is captured; sensitivity
+# to this choice is evaluated in section 5.
+plot_level_dir   <- # insert path to folder containing per-subplot downsampled
+                    # point clouds (files named subplot{N}_downsample.txt)
+leaf_by_subplot  <- # insert path to subplot-organised leaf files folder
+combined_out_dir <- # insert path to output folder for combined host+liana files
+
+dir_create(combined_out_dir)
+
+subplot_folders <- dir_ls(leaf_by_subplot, type = "directory")
+
+for (fld in subplot_folders) {
+  sub_num  <- gsub("[^0-9]", "", basename(fld))
+  sub_file <- file.path(plot_level_dir,
+                         paste0("subplot", sub_num, "_downsample.txt"))
+  if (!file_exists(sub_file)) {
+    message("Skipping subplot ", sub_num, " — plot cloud not found."); next
+  }
+  message("Loading subplot ", sub_num, "...")
+  subplot_pc <- fread(sub_file, select = 1:3,
+                      col.names = c("X", "Y", "Z"))
+
+  for (lf in dir_ls(fld, glob = "*.txt")) {
+    tree_id  <- sub("_leaf\\.txt$", "", basename(lf))
+    leaf_pts <- fread(lf, select = 1:3, col.names = c("X", "Y", "Z"))
+    leaf_mat <- as.matrix(unique(leaf_pts))
+    if (nrow(leaf_mat) < 5) next
+
+    ashape <- try(ashape3d(leaf_mat, alpha = 100), silent = TRUE)
+    if (inherits(ashape, "try-error")) next
+
+    # Crop the subplot cloud to a 0.2 m buffered bounding box before the
+    # (slower) point-in-hull check — substantially reduces computation time
+    tree_box <- subplot_pc[
+      X %between% (range(leaf_pts$X) + c(-0.2, 0.2)) &
+      Y %between% (range(leaf_pts$Y) + c(-0.2, 0.2)) &
+      Z %between% (range(leaf_pts$Z) + c(-0.2, 0.2))]
+    if (nrow(tree_box) == 0) next
+
+    inside_idx   <- inashape3d(ashape, indexAlpha = 1,
+                                p = as.matrix(tree_box))
+    combined_pts <- tree_box[inside_idx >= 1]
+
+    if (nrow(combined_pts) > 0)
+      fwrite(combined_pts,
+             file.path(combined_out_dir, paste0(tree_id, "_combined.txt")),
+             sep = "\t")
+  }
+  rm(subplot_pc); gc()
+}
+message("Combined files saved to: ", combined_out_dir)
+```
+
+## 4.5 Clip tree point clouds to crown only
+
+```{r}
+#| label: crown-clipping
+
+library(data.table); library(fs); library(dplyr); library(readr)
+
+# For host PAI estimation, each full tree point cloud is clipped to retain
+# only points at or above the first major branch. The crown base height
+# is derived from ITSMe metrics as total height − crown depth.
+tree_dir      <- # insert path to folder containing full individual tree files
+crown_dir     <- # insert path to output folder for crown-only point clouds
+itsme_metrics <- # insert path to ITSMe_tree_metrics_summary_final.csv
+
+dir_create(crown_dir)
+
+itsme <- read_csv(itsme_metrics, show_col_types = FALSE) |>
+  mutate(tag = as.numeric(gsub(".*_([0-9]+)\\.txt$", "\\1", filename)))
+
+for (tf in dir_ls(tree_dir, glob = "*.txt")) {
+  file_name <- basename(tf)
+  tag_id    <- as.numeric(gsub(".*_([0-9]+)\\.txt$", "\\1", file_name))
+  met       <- filter(itsme, tag == tag_id)
+  if (nrow(met) == 0) { message("!! Skipping ", file_name, " — not in ITSMe."); next }
+
+  dat <- fread(tf, col.names = c("X", "Y", "Z", "class"))
+  if (nrow(dat) == 0) next
+
+  z_cutoff  <- min(dat$Z) + (met$height[1] - met$crown_depth[1])
+  crown_pts <- dat[Z >= z_cutoff]
+
+  if (nrow(crown_pts) == 0) {
+    message("!! No crown points for ", file_name); next
+  }
+  fwrite(crown_pts, file.path(crown_dir, file_name), sep = "\t",
+         col.names = FALSE)
+  rm(dat, crown_pts); gc()
+}
+message("Crown files saved to: ", crown_dir)
+```
+
+## 4.6 PAI calculation
+
+```{r}
+#| label: pai-calculation
+
+library(data.table); library(VoxR); library(raster)
+
+# Core PAI function: voxelises the point cloud at 0.10 m resolution and
+# sums the per-slice contact frequency, scaled by a leaf-inclination
+# correction factor of 1.1 (Flynn et al., 2023).
+# PAI = Σ_k [ 1.1 × (occupied XY cells in slice k) / (total crown footprint cells) ]
+
+compute_PAI <- function(file, tree_id, res = 0.1) {
+  pts <- fread(file, select = 1:3, col.names = c("x", "y", "z"))
+  if (nrow(pts) == 0)
+    return(data.frame(tree = tree_id, PAI = NA,
+                      slices_occupied = 0L, crown_height_m = NA))
+  vox <- VoxR::vox(pts, res = res, full.grid = FALSE)
+  if (nrow(vox) == 0)
+    return(data.frame(tree = tree_id, PAI = NA,
+                      slices_occupied = 0L, crown_height_m = NA))
+  rt           <- rasterFromXYZ(vox[, 1:3, drop = FALSE])
+  ncells_total <- ncell(rt)
+  z_seq        <- seq(min(vox$z), max(vox$z), by = res)
+  pai_vec      <- numeric(length(z_seq))
+  for (i in seq_along(z_seq)) {
+    slice <- vox[abs(vox$z - z_seq[i]) <= (res / 2), , drop = FALSE]
+    if (nrow(slice) > 0)
+      pai_vec[i] <- 1.1 *
+        length(unique(cellFromXY(rt, slice[, 1:2, drop = FALSE]))) /
+        ncells_total
+  }
+  data.frame(tree = tree_id, PAI = sum(pai_vec),
+             slices_occupied = sum(pai_vec > 0),
+             crown_height_m  = length(z_seq) * res)
+}
+
+# ── Host-tree PAI ───────────────────────────────────────────────────────────────
+crown_dir  <- # insert path to crown folder (from step 4.5)
+host_out   <- # insert path for output CSV: PAI_crown_results.csv
+
+crown_files <- list.files(crown_dir, pattern = "\\.txt$", full.names = TRUE)
+tree_ids    <- sub("\\.txt$", "", basename(crown_files))
+
+write.table(data.frame(tree=character(), PAI=numeric(),
+                        slices_occupied=integer(), crown_height_m=numeric()),
+            host_out, sep=",", row.names=FALSE, col.names=TRUE)
+for (k in seq_along(tree_ids)) {
+  message("Host PAI: ", tree_ids[k], " (", k, "/", length(tree_ids), ")")
+  write.table(compute_PAI(crown_files[k], tree_ids[k]),
+              host_out, sep=",", row.names=FALSE, col.names=FALSE, append=TRUE)
+}
+
+# ── Combined PAI ────────────────────────────────────────────────────────────────
+combined_dir <- # insert path to combined host+liana files folder (from step 4.4)
+comb_out     <- # insert path for output CSV: PAI_combined_results.csv
+
+combined_files <- list.files(combined_dir, pattern="_combined\\.txt$",
+                             full.names=TRUE)
+comb_ids       <- gsub(".*_([0-9]+)_combined\\.txt$", "\\1",
+                       basename(combined_files))
+
+write.table(data.frame(tree=character(), PAI=numeric(),
+                        slices_occupied=integer(), crown_height_m=numeric()),
+            comb_out, sep=",", row.names=FALSE, col.names=TRUE)
+for (k in seq_along(comb_ids)) {
+  message("Combined PAI: ", comb_ids[k], " (", k, "/", length(comb_ids), ")")
+  write.table(compute_PAI(combined_files[k], comb_ids[k]),
+              comb_out, sep=",", row.names=FALSE, col.names=FALSE, append=TRUE)
+}
+```
+
+## 4.7 Compile final PAI results table
+
+```{r}
+#| label: compile-pai
+
+library(dplyr); library(readr); library(fs)
+
+host_out    <- # insert path to PAI_crown_results.csv (from step 4.6)
+comb_out    <- # insert path to PAI_combined_results.csv (from step 4.6)
+pai_out_dir <- # insert path to output folder for final results
+out_file    <- file.path(pai_out_dir, "PAI_h1.2_results.csv")
+
+dir_create(pai_out_dir)
+
+df_crown <- read_csv(host_out, show_col_types = FALSE) |>
+  rename(file_name = tree, PAI_tree_only = PAI) |>
+  mutate(tag = as.numeric(sub(".*_([0-9]+).*", "\\1", file_name)))
+
+df_comb <- read_csv(comb_out, show_col_types = FALSE) |>
+  rename(PAI_combined = PAI) |>
+  mutate(tag = as.numeric(sub("^[A-Za-z0-9]{6}_([0-9]{3,6})$", "\\1", tree))) |>
+  select(tag, PAI_combined)
+
+# Report any trees present in host-only but not combined (excluded from merge)
+missing <- setdiff(df_crown$tag, df_comb$tag)
+if (length(missing) > 0) {
+  message(length(missing), " tree(s) in host-only but not combined — excluded:")
+  print(filter(df_crown, tag %in% missing) |> select(file_name, tag, PAI_tree_only))
+}
+
+df_final <- inner_join(df_crown, df_comb, by = "tag")
+message("Final PAI table: ", nrow(df_final), " trees")
+write_csv(df_final, out_file)
+message("Saved: ", out_file)
+```
+
+---
+
+# 5 PAI Sensitivity Analyses
+
+## 5.1 Background
+
+PAI is sensitive to both the alpha value used to define the liana
+extraction hull and the voxel resolution. A stratified subsample of 60
+trees (20 per liana load category: none, light, heavy) was used to
+assess stability across a range of both parameters. A voxel size of
+0.10 m and an alpha value of 100 were selected: PAI stabilised above
+α = 50 in the alpha sensitivity analysis, and 0.10 m sat within the
+stable region of the voxel sensitivity curve — small enough to resolve
+individual leaves but large enough to avoid noise artefacts from empty
+voxels (Wei et al., 2020).
+
+## 5.2 Select trees for sensitivity analysis
+
+```{r}
+#| label: sensitivity-selection
+
+library(dplyr); library(readr)
+
+# Stratified random sample: 20 trees from each liana load category.
+# df_final (from step 4.7) and fieldwork metadata must be in the environment.
+
+full_dataset <- df_final |>
+  inner_join(fieldwork, by = "tag")
+
+sensitivity_selection <- full_dataset |>
+  mutate(liana_cat = case_when(
+    lianas_2019 == 0                    ~ "none",
+    lianas_2019 > 0 & lianas_2019 <= 50 ~ "light",
+    lianas_2019 > 50                    ~ "heavy",
+    TRUE ~ NA_character_)) |>
+  filter(!is.na(PAI_combined), !is.na(liana_cat)) |>
+  group_by(liana_cat) |>
+  slice_sample(n = 20) |>
+  ungroup()
+
+print(count(sensitivity_selection, liana_cat))
+
+sensitivity_tags_file <- # insert path for output CSV: sensitivity_analysis_tags.csv
+write_csv(sensitivity_selection, sensitivity_tags_file)
+```
+
+## 5.3 Alpha-shape parameter sensitivity
+
+```{r}
+#| label: alpha-sensitivity
+
+library(data.table); library(fs); library(alphashape3d)
+library(VoxR); library(raster); library(dplyr)
+
+plot_level_dir <- # insert path to subplot-level downsampled point clouds
+leaf_dir       <- # insert path to leaf-cleaned files folder
+wood_dir       <- # insert path to wood points folder
+sens_out_dir   <- # insert path to output folder for alpha sensitivity files
+sens_results   <- # insert path for output CSV: sensitivity_results_final.csv
+
+ALPHA_VALS <- c(1, 25, 50, 100, 125)
+BUFFER     <- 0.2
+target_trees <- as.data.table(sensitivity_selection)
+
+# For each alpha value, re-extract combined point clouds and recalculate PAI
+results <- list()
+
+for (current_alpha in ALPHA_VALS) {
+  version_dir <- file.path(sens_out_dir, paste0("alpha_", current_alpha))
+  dir_create(version_dir)
+  message(">>> Alpha: ", current_alpha)
+
+  for (i in seq_len(nrow(target_trees))) {
+    file_id   <- target_trees$file_name[i]
+    sub_id    <- target_trees$sbpltnm[i]
+    leaf_path <- file.path(leaf_dir, paste0(file_id, "_leaf.txt"))
+    wood_path <- file.path(wood_dir, paste0(file_id, "_wood.txt"))
+    sub_file  <- file.path(plot_level_dir,
+                            paste0("subplot", sub_id, "_downsample.txt"))
+    out_path  <- file.path(version_dir,
+                            paste0(file_id, "_alpha", current_alpha, ".txt"))
+    if (file_exists(out_path) || !file_exists(leaf_path)) next
+
+    leaf_pts   <- fread(leaf_path, select = 1:3, col.names = c("X","Y","Z"))
+    ashape     <- try(ashape3d(as.matrix(leaf_pts), alpha = current_alpha),
+                      silent = TRUE)
+    if (inherits(ashape, "try-error")) next
+
+    subplot_pc <- fread(sub_file, select = 1:3, col.names = c("X","Y","Z"))
+    tree_box   <- subplot_pc[
+      X %between% (range(leaf_pts$X) + c(-BUFFER, BUFFER)) &
+      Y %between% (range(leaf_pts$Y) + c(-BUFFER, BUFFER)) &
+      Z %between% (range(leaf_pts$Z) + c(-BUFFER, BUFFER))]
+
+    inside_idx   <- inashape3d(ashape, indexAlpha = 1,
+                                p = as.matrix(tree_box[, 1:3]))
+    foliage_only <- tree_box[inside_idx >= 1]
+
+    # Remove wood points to ensure PAI reflects leaf area only
+    if (file_exists(wood_path)) {
+      wood_pts     <- fread(wood_path, select = 1:3, col.names = c("X","Y","Z"))
+      setkey(foliage_only, X, Y, Z); setkey(wood_pts, X, Y, Z)
+      foliage_only <- foliage_only[!wood_pts]
+    }
+    if (nrow(foliage_only) > 0)
+      fwrite(foliage_only, out_path, sep = "\t")
+    rm(subplot_pc, leaf_pts, ashape, tree_box, foliage_only); gc()
+  }
+
+  # Calculate PAI for this alpha version
+  for (f in dir_ls(version_dir, glob = "*.txt")) {
+    file_id <- sub(paste0("_alpha", current_alpha, "\\.txt$"), "", basename(f))
+    pts     <- fread(f, select = 1:3, col.names = c("x","y","z"))
+    if (nrow(pts) == 0) next
+    vox          <- VoxR::vox(pts, res = 0.1, full.grid = FALSE)
+    rt           <- rasterFromXYZ(vox[, 1:3, drop = FALSE])
+    ncells_total <- ncell(rt)
+    z_seq        <- seq(min(vox$z), max(vox$z), by = 0.1)
+    pai_val <- sum(sapply(z_seq, function(z0) {
+      slice <- vox[abs(vox$z - z0) <= 0.05]
+      if (nrow(slice) == 0) return(0)
+      1.1 * length(unique(cellFromXY(rt, slice[, 1:2, drop = FALSE]))) /
+        ncells_total
+    }))
+    results[[paste0(file_id, "_a", current_alpha)]] <-
+      data.table(tree_id = file_id, alpha = current_alpha, pai = pai_val)
+  }
+}
+
+sens_dt <- bind_rows(results)
+fwrite(sens_dt, sens_results)
+message("Alpha sensitivity results saved.")
+```
+
+### Alpha sensitivity figures
+
+```{r}
+#| label: alpha-sensitivity-figures
+#| eval: true   # these can be run once sens_dt is loaded
+
+library(ggplot2); library(dplyr)
+
+figs_dir <- # insert path to output folder for figures
+
+RESCALE_FACTOR <- 12     # correction factor used in main analysis
+
+sens_dt_scaled <- sens_dt |>
+  mutate(pai_corrected = pai * RESCALE_FACTOR)
+
+# Remove trees with implausibly large PAI (likely segmentation artefacts)
+outliers <- sens_dt_scaled |>
+  group_by(tree_id) |>
+  summarise(max_pai = max(pai_corrected, na.rm = TRUE)) |>
+  filter(max_pai > 15) |>
+  pull(tree_id)
+
+sens_clean <- filter(sens_dt_scaled, !tree_id %in% outliers)
+
+sens_theme <- theme_classic(base_size = 12) +
+  theme(axis.title = element_text(size = 12),
+        axis.text  = element_text(size = 11))
+
+# Individual tree trajectories — shows tree-level stability
+p_alpha_trees <- ggplot(sens_clean,
+                         aes(x = alpha, y = pai_corrected, group = tree_id)) +
+  geom_line(colour = "grey50", alpha = 0.5, linewidth = 0.4) +
+  geom_point(colour = "grey30", size = 1.2) +
+  geom_vline(xintercept = 100, linetype = "dashed",
+             colour = "firebrick", linewidth = 0.7) +
+  annotate("text", x = 103,
+           y = max(sens_clean$pai_corrected, na.rm = TRUE) * 0.97,
+           label = "\u03b1 = 100\n(used in analysis)",
+           hjust = 0, colour = "firebrick", size = 3.2) +
+  scale_x_continuous(breaks = c(1, 25, 50, 100, 125)) +
+  scale_y_continuous(limits = c(0, NA)) +
+  sens_theme +
+  labs(x = "Alpha value",
+       y = expression("PAI (m"^2~"m"^-2~")"),
+       title = "Sensitivity of PAI to alpha-shape parameter")
+
+# Mean ± SD ribbon — shows population-level stability
+sens_summary <- sens_clean |>
+  group_by(alpha) |>
+  summarise(mean_pai = mean(pai_corrected, na.rm = TRUE),
+            sd_pai   = sd(pai_corrected,   na.rm = TRUE), .groups = "drop")
+
+p_alpha_mean <- ggplot(sens_summary, aes(x = alpha, y = mean_pai)) +
+  geom_ribbon(aes(ymin = mean_pai - sd_pai, ymax = mean_pai + sd_pai),
+              fill = "steelblue", alpha = 0.25) +
+  geom_line(colour = "steelblue", linewidth = 1) +
+  geom_point(colour = "steelblue", size = 2.5) +
+  geom_vline(xintercept = 100, linetype = "dashed",
+             colour = "firebrick", linewidth = 0.7) +
+  scale_x_continuous(breaks = c(1, 25, 50, 100, 125)) +
+  scale_y_continuous(limits = c(0, NA)) +
+  sens_theme +
+  labs(x = "Alpha value",
+       y = expression("Mean PAI \u00b1 1 SD (m"^2~"m"^-2~")"),
+       title = "Mean PAI across 60 trees by alpha value")
+
+ggsave(file.path(figs_dir, "alpha_sensitivity_all_trees.png"),
+       p_alpha_trees, width = 8, height = 5, dpi = 300)
+ggsave(file.path(figs_dir, "alpha_sensitivity_summary.png"),
+       p_alpha_mean,  width = 7, height = 5, dpi = 300)
+```
+
+## 5.4 Voxel resolution sensitivity
+
+```{r}
+#| label: voxel-sensitivity
+
+library(data.table); library(dplyr); library(VoxR); library(raster)
+
+crown_dir      <- # insert path to crown folder (from step 4.5)
+voxel_out_file <- # insert path for output CSV: VOXEL_sensitivity_results.csv
+
+VOXEL_SIZES    <- c(0.025, 0.05, 0.1, 0.15, 0.2)
+focal_tree_ids <- sensitivity_selection$file_name
+
+write.table(
+  data.frame(tree = character(), voxel_res = numeric(), PAI = numeric(),
+             slices_occupied = integer(), crown_height_m = numeric()),
+  voxel_out_file, sep = ",", row.names = FALSE, col.names = TRUE)
+
+for (v_res in VOXEL_SIZES) {
+  message("Voxel size: ", v_res, " m")
+  for (t_id in focal_tree_ids) {
+    crown_path <- file.path(crown_dir, paste0(t_id, ".txt"))
+    if (!file.exists(crown_path)) next
+    pts <- fread(crown_path, select = 1:3, col.names = c("x","y","z"))
+    if (nrow(pts) == 0) next
+    vox          <- VoxR::vox(pts, res = v_res, full.grid = FALSE)
+    rt           <- rasterFromXYZ(vox[, 1:3, drop = FALSE])
+    ncells_total <- ncell(rt)
+    z_seq        <- seq(min(vox$z), max(vox$z), by = v_res)
+    pai_vec      <- numeric(length(z_seq))
+    for (i in seq_along(z_seq)) {
+      slice <- vox[abs(vox$z - z_seq[i]) <= (v_res / 2), , drop = FALSE]
+      if (nrow(slice) > 0)
+        pai_vec[i] <- 1.1 *
+          length(unique(cellFromXY(rt, slice[, 1:2, drop = FALSE]))) /
+          ncells_total
+    }
+    write.table(
+      data.frame(tree = t_id, voxel_res = v_res, PAI = sum(pai_vec),
+                 slices_occupied = sum(pai_vec > 0),
+                 crown_height_m  = length(z_seq) * v_res),
+      voxel_out_file, sep = ",", row.names = FALSE,
+      col.names = FALSE, append = TRUE)
+  }
+}
+message("Voxel sensitivity analysis complete.")
+```
+
+### Voxel sensitivity figure
+
+```{r}
+#| label: voxel-sensitivity-figure
+
+library(ggplot2); library(readr)
+
+voxel_results <- read_csv(voxel_out_file, show_col_types = FALSE)
+
+p_voxel <- ggplot(voxel_results,
+                   aes(x = voxel_res, y = PAI, group = tree)) +
+  geom_line(colour = "grey50", alpha = 0.5, linewidth = 0.4) +
+  geom_point(colour = "grey30", size = 1.2) +
+  geom_vline(xintercept = 0.10, linetype = "dashed",
+             colour = "firebrick", linewidth = 0.7) +
+  annotate("text", x = 0.105,
+           y = max(voxel_results$PAI, na.rm = TRUE) * 0.97,
+           label = "0.10 m\n(used in analysis)",
+           hjust = 0, colour = "firebrick", size = 3.2) +
+  scale_x_continuous(breaks = c(0.025, 0.05, 0.10, 0.15, 0.20)) +
+  scale_y_continuous(limits = c(0, NA)) +
+  sens_theme +
+  labs(x = "Voxel size (m)",
+       y = expression("PAI (m"^2~"m"^-2~")"),
+       title = "Sensitivity of PAI to voxel resolution")
+
+ggsave(file.path(figs_dir, "voxel_sensitivity.png"),
+       p_voxel, width = 8, height = 5, dpi = 300)
+```
+
+---
+
+```{r}
+#| label: session-info
+#| code-fold: false
+sessionInfo()
+```

@@ -1,0 +1,4 @@
+Model,AIC,BIC,ΔAIC vs log-log,Verdict
+log(H) ~ log(DBH) [log-log lmer],-272,-247.3,0,← reference
+"MM: Asym ~ H1_category, half ~ 1",1324.5,1345.6,1596.4,log-log preferred
+"MM: Asym ~ 1, half ~ H1_category",1323.9,1345.1,1595.9,log-log preferred
