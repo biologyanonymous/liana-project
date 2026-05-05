@@ -1,4 +1,4 @@
-Model,term,Estimate,Est.Error,Q2.5,Q97.5,sig,pct_effect,pct_low,pct_high
-H2 height 2011 — log(height_2011),Intercept,1.7874,0.0587,1.6732,1.9023,TRUE,497.4,432.94,570.12
-H2 height 2011 — log(height_2011),log_dbh_2011,0.3996,0.0147,0.3705,0.4286,TRUE,49.13,44.85,53.51
-H2 height 2011 — log(height_2011),h2_2011_categorygainedinfestation,-0.0418,0.0146,-0.0703,-0.0126,TRUE,-4.09,-6.79,-1.25
+Model,term,Estimate,Std. Error,Q2.5,Q97.5,Significant,% Effect
+H2 height 2011 — log(height 2011),Intercept,1.79,0.0587,1.67,1.9,Yes,497
+H2 height 2011 — log(height 2011),log_dbh_2011,0.4,0.0147,0.371,0.429,Yes,49.1
+H2 height 2011 — log(height 2011),h2_2011_categorygainedinfestation,-0.0418,0.0146,-0.0703,-0.0126,Yes,-4.09
