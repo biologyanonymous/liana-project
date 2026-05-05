@@ -1,0 +1,4 @@
+H1_category,Estimated marginal mean (log),SE,df,lower.CL,upper.CL,pct_effect,% Effect vs baseline,Hypothesis
+Never infested,-0.484,0.033,248,-0.549034402293897,-0.41907313640495664,0,0,H1 — Slenderness
+Lost lianas,-0.532,0.0274,248,-0.5861929503002938,-0.47832596950397216,-4.7,-4.7,H1 — Slenderness
+Persistently infested,-0.593,0.0261,248,-0.6442802747966617,-0.5414331439924963,-10.3,-10.3,H1 — Slenderness

@@ -1,0 +1,3 @@
+H2_category,Estimated marginal mean (log),SE,df,lower.CL,upper.CL,pct_effect,% Effect vs baseline,Hypothesis
+remained uninfested,-0.464,0.0255,179,-0.5146394085781849,-0.41388416713969567,0,0,H2 — Slenderness
+gained infestation,-0.554,0.0325,179,-0.6182252568288972,-0.48985863446501104,-8.6,-8.6,H2 — Slenderness

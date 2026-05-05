@@ -1,17 +1,15 @@
-Model,term,Estimate,Est.Error,Q2.5,Q97.5,sig,pct_effect,pct_low,pct_high
-H2 TLS — Tree height,Intercept,1.8486,0.1057,1.6441,2.0575,TRUE,535.11,417.63,682.6
-H2 TLS — Tree height,log_dbh,0.3895,0.0274,0.3354,0.4422,TRUE,47.62,39.85,55.61
-H2 TLS — Tree height,H2_categorygainedinfestation,-0.0098,0.0179,-0.0448,0.0249,FALSE,-0.97,-4.38,2.52
-H2 TLS — Crown depth,Intercept,1.3653,0.234,0.9074,1.8263,TRUE,291.71,147.79,521.11
-H2 TLS — Crown depth,log_dbh,0.3501,0.0611,0.2303,0.4697,TRUE,41.93,25.9,59.96
-H2 TLS — Crown depth,H2_categorygainedinfestation,0.0149,0.0404,-0.0635,0.0963,FALSE,1.51,-6.15,10.11
-H2 TLS — Crown projected area,Intercept,-1.1353,0.3492,-1.8279,-0.4514,TRUE,-67.87,-83.93,-36.33
-H2 TLS — Crown projected area,log_dbh,1.4843,0.0901,1.3061,1.6636,TRUE,341.19,269.17,427.83
-H2 TLS — Crown projected area,H2_categorygainedinfestation,0.021,0.0583,-0.0942,0.1352,FALSE,2.12,-8.99,14.48
-H2 TLS — Crown volume,Intercept,-0.4735,0.4883,-1.4206,0.4919,FALSE,-37.72,-75.84,63.54
-H2 TLS — Crown volume,log_dbh,1.693,0.1262,1.4448,1.9373,TRUE,443.57,324.08,594.03
-H2 TLS — Crown volume,H2_categorygainedinfestation,0.0299,0.0805,-0.1273,0.1889,FALSE,3.03,-11.96,20.79
-H2 TLS — Slenderness (height/DBH),Intercept,-0.4736,0.0395,-0.5501,-0.3963,TRUE,-37.72,-42.31,-32.72
-H2 TLS — Slenderness (height/DBH),H2_categorygainedinfestation,-0.0427,0.036,-0.1134,0.0273,FALSE,-4.18,-10.72,2.77
-H2 TLS — Crown base height ratio,Intercept,-0.8056,0.047,-0.8996,-0.7165,TRUE,-55.32,-59.33,-51.15
-H2 TLS — Crown base height ratio,H2_categorygainedinfestation,-0.0285,0.0488,-0.1244,0.067,FALSE,-2.81,-11.7,6.93
+Model,term,Estimate,Std. Error,Q2.5,Q97.5,Significant,% Effect
+H2 — Tree height,Intercept,1.85,0.104,1.64,2.05,Yes,535
+H2 — Tree height,log_dbh,0.389,0.0269,0.338,0.443,Yes,47.6
+H2 — Tree height,H2_categorygainedinfestation,-0.0102,0.0179,-0.0457,0.0245,No,-1.01
+H2 — Crown depth,Intercept,1.36,0.234,0.904,1.82,Yes,290
+H2 — Crown depth,log_dbh,0.351,0.0609,0.231,0.47,Yes,42.1
+H2 — Crown depth,H2_categorygainedinfestation,0.0155,0.04,-0.0619,0.0948,No,1.56
+H2 — Crown projected area,Intercept,-1.14,0.348,-1.83,-0.445,Yes,-68
+H2 — Crown projected area,log_dbh,1.48,0.09,1.31,1.66,Yes,341
+H2 — Crown projected area,H2_categorygainedinfestation,0.0224,0.0587,-0.0933,0.138,No,2.26
+H2 — Crown volume,Intercept,-0.477,0.486,-1.44,0.462,No,-38
+H2 — Crown volume,log_dbh,1.69,0.126,1.45,1.94,Yes,444
+H2 — Crown volume,H2_categorygainedinfestation,0.0299,0.0805,-0.129,0.189,No,3.04
+H2 — Crown base height ratio,Intercept,-0.805,0.0464,-0.899,-0.715,Yes,-55.3
+H2 — Crown base height ratio,H2_categorygainedinfestation,-0.0287,0.0487,-0.125,0.0656,No,-2.83

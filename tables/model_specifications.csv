@@ -3,13 +3,13 @@ H1,log(Tree height),brm LMM (Student-t),log(DBH) + H1_category,(1|species) + (1|
 H1,log(Crown projected area),brm LMM (Student-t),log(DBH) + H1_category,(1|species) + (1|subplot),251,67
 H1,log(Crown volume),brm LMM (Student-t),log(DBH) + H1_category,(1|species) + (1|subplot),251,67
 H1,log(Crown depth),brm LMM (Student-t),log(DBH) + H1_category,(1|species) + (1|subplot),251,67
-H1,log(Slenderness),brm LMM (Student-t),H1_category,(1|species) + (1|subplot),251,67
+H1,Slenderness (height/DBH),One-way ANOVA,H1_category,—,251,67
 H1,log(Crown base height ratio),brm LMM (Student-t),H1_category,(1|species) + (1|subplot),251,67
 H1 PAI,log(PAI tree only),brm LMM (Student-t),infest_cat + log(DBH),(1|Species) + (1|subplot),575,91
 H2 TLS,log(Tree height),brm LMM (Student-t),log(DBH) + H2_category,(1|species) + (1|subplot),181,61
 H2 TLS,log(Crown projected area),brm LMM (Student-t),log(DBH) + H2_category,(1|species) + (1|subplot),181,61
 H2 TLS,log(Crown volume),brm LMM (Student-t),log(DBH) + H2_category,(1|species) + (1|subplot),181,61
 H2 TLS,log(Crown depth),brm LMM (Student-t),log(DBH) + H2_category,(1|species) + (1|subplot),181,61
-H2 TLS,log(Slenderness),brm LMM (Student-t),H2_category,(1|species) + (1|subplot),181,61
+H2 TLS,Slenderness (height/DBH),One-way ANOVA,H2_category,—,181,61
 H2 TLS,log(Crown base height ratio),brm LMM (Student-t),H2_category,(1|species) + (1|subplot),181,61
 H2 height,log(Height 2011),brm LMM (Student-t),log(DBH 2011) + h2_2011_category,(1|species),414,85

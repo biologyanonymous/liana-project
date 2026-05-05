@@ -1,5 +1,0 @@
-Model,term,Estimate,Est.Error,Q2.5,Q97.5,sig,pct_effect,pct_low,pct_high
-H1 PAI — log(PAI_tree_only),Intercept,1.9062,0.2217,1.4688,2.3385,TRUE,572.74,334.39,936.54
-H1 PAI — log(PAI_tree_only),infest_catLight,0.0837,0.0508,-0.016,0.1831,FALSE,8.73,-1.59,20.09
-H1 PAI — log(PAI_tree_only),infest_catHeavy,-0.1308,0.0542,-0.2363,-0.0254,TRUE,-12.26,-21.04,-2.51
-H1 PAI — log(PAI_tree_only),log_dbh,-0.2026,0.0579,-0.3145,-0.0873,TRUE,-18.34,-26.99,-8.36

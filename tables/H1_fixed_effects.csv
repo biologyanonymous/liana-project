@@ -1,23 +1,20 @@
-Model,term,Estimate,Est.Error,Q2.5,Q97.5,sig,pct_effect,pct_low,pct_high
-H1 — Tree height,Intercept,1.73,0.0979,1.5394,1.9205,TRUE,464.08,366.2,582.47
-H1 — Tree height,log_dbh,0.4231,0.0249,0.3743,0.472,TRUE,52.66,45.4,60.32
-H1 — Tree height,H1_categoryLostlianas,-0.0508,0.0197,-0.0895,-0.0123,TRUE,-4.95,-8.56,-1.23
-H1 — Tree height,H1_categoryPersistentlyinfested,-0.1168,0.0213,-0.1595,-0.0754,TRUE,-11.03,-14.74,-7.26
-H1 — Crown depth,Intercept,1.3127,0.1843,0.9554,1.6811,TRUE,271.62,159.97,437.14
-H1 — Crown depth,log_dbh,0.3636,0.0468,0.2698,0.454,TRUE,43.85,30.97,57.45
-H1 — Crown depth,H1_categoryLostlianas,1e-4,0.046,-0.0897,0.0898,FALSE,0.01,-8.58,9.4
-H1 — Crown depth,H1_categoryPersistentlyinfested,-0.0556,0.046,-0.146,0.0337,FALSE,-5.41,-13.58,3.42
-H1 — Crown projected area,Intercept,-1.2864,0.3531,-1.9976,-0.6067,TRUE,-72.37,-86.43,-45.49
-H1 — Crown projected area,log_dbh,1.5309,0.0898,1.3569,1.7117,TRUE,362.25,288.43,453.84
-H1 — Crown projected area,H1_categoryLostlianas,-0.106,0.0715,-0.2495,0.0345,FALSE,-10.06,-22.08,3.51
-H1 — Crown projected area,H1_categoryPersistentlyinfested,-0.2529,0.077,-0.4058,-0.1057,TRUE,-22.34,-33.35,-10.03
-H1 — Crown volume,Intercept,-0.7448,0.5012,-1.7458,0.2211,FALSE,-52.52,-82.55,24.75
-H1 — Crown volume,log_dbh,1.7642,0.1277,1.5181,2.0201,TRUE,483.68,356.35,653.92
-H1 — Crown volume,H1_categoryLostlianas,-0.0773,0.1016,-0.2796,0.12,FALSE,-7.44,-24.39,12.75
-H1 — Crown volume,H1_categoryPersistentlyinfested,-0.2998,0.1073,-0.5143,-0.094,TRUE,-25.91,-40.21,-8.97
-H1 — Slenderness (height/DBH),Intercept,-0.4874,0.0414,-0.5699,-0.4077,TRUE,-38.58,-43.44,-33.48
-H1 — Slenderness (height/DBH),H1_categoryLostlianas,-0.0346,0.0376,-0.1094,0.039,FALSE,-3.4,-10.37,3.98
-H1 — Slenderness (height/DBH),H1_categoryPersistentlyinfested,-0.0728,0.0387,-0.1487,0.0035,FALSE,-7.02,-13.82,0.35
-H1 — Crown base height ratio,Intercept,-0.8028,0.0531,-0.9081,-0.6997,TRUE,-55.19,-59.67,-50.33
-H1 — Crown base height ratio,H1_categoryLostlianas,-0.0405,0.0553,-0.1495,0.0669,FALSE,-3.97,-13.89,6.92
-H1 — Crown base height ratio,H1_categoryPersistentlyinfested,-0.0733,0.0594,-0.1908,0.0422,FALSE,-7.07,-17.37,4.31
+Model,term,Estimate,Std. Error,Q2.5,Q97.5,Significant,% Effect
+H1 — Tree height,Intercept,1.73,0.0979,1.54,1.92,Yes,464
+H1 — Tree height,log_dbh,0.423,0.0249,0.374,0.472,Yes,52.7
+H1 — Tree height,H1_categoryLostlianas,-0.0508,0.0197,-0.0895,-0.0123,Yes,-4.95
+H1 — Tree height,H1_categoryPersistentlyinfested,-0.117,0.0213,-0.159,-0.0754,Yes,-11
+H1 — Crown depth,Intercept,1.31,0.184,0.955,1.68,Yes,272
+H1 — Crown depth,log_dbh,0.364,0.0468,0.27,0.454,Yes,43.9
+H1 — Crown depth,H1_categoryLostlianas,1.05e-4,0.046,-0.0897,0.0898,No,0.0105
+H1 — Crown depth,H1_categoryPersistentlyinfested,-0.0556,0.046,-0.146,0.0337,No,-5.41
+H1 — Crown projected area,Intercept,-1.29,0.353,-2,-0.607,Yes,-72.4
+H1 — Crown projected area,log_dbh,1.53,0.0898,1.36,1.71,Yes,362
+H1 — Crown projected area,H1_categoryLostlianas,-0.106,0.0715,-0.249,0.0345,No,-10.1
+H1 — Crown projected area,H1_categoryPersistentlyinfested,-0.253,0.077,-0.406,-0.106,Yes,-22.3
+H1 — Crown volume,Intercept,-0.745,0.501,-1.75,0.221,No,-52.5
+H1 — Crown volume,log_dbh,1.76,0.128,1.52,2.02,Yes,484
+H1 — Crown volume,H1_categoryLostlianas,-0.0773,0.102,-0.28,0.12,No,-7.44
+H1 — Crown volume,H1_categoryPersistentlyinfested,-0.3,0.107,-0.514,-0.094,Yes,-25.9
+H1 — Crown base height ratio,Intercept,-0.803,0.0531,-0.908,-0.7,Yes,-55.2
+H1 — Crown base height ratio,H1_categoryLostlianas,-0.0405,0.0553,-0.149,0.0669,No,-3.97
+H1 — Crown base height ratio,H1_categoryPersistentlyinfested,-0.0733,0.0594,-0.191,0.0422,No,-7.07
