@@ -1087,32 +1087,72 @@ cat("2011 height dataset — n by outcome:\n")
 print(count(dat_h2_2011, h2_2011_category))
 cat("Species represented:", n_distinct(dat_h2_2011$species), "\n\n")
 
-# Reference category = "remained uninfested" (first factor level, set in load-data).
-# Coefficient shown is "gained infestation" relative to "remained uninfested".
-# If the .rds was fitted before factor levels were corrected, delete it and refit:
-#   file.remove(file.path(model_dir, "m_h2_2011_height.rds"))
-rds_h2_2011 <- file.path(model_dir, "m_h2_2011_height.rds")
-
+# ── H2 2011 height model: Michaelis-Menten MM8 ───────────────────────────────
+# Model selection via WAIC comparison (see mm_waic_comparison_v2.R) showed the
+# log-log model was strongly disfavoured for the 2011 dataset (DWAIC = 38.9),
+# while the MM8 formulation (Vm + x + K all varying by infestation outcome)
+# was the best-fitting converged model. Log-log was retained for H1 and H2 TLS
+# where it was decisively preferred (DWAIC > 12 for all MM alternatives).
+# Reference category = "remained uninfested".
 
 dat_h2_2011$h2_2011_category <- factor(dat_h2_2011$h2_2011_category)
-
 dat_h2_2011$h2_2011_category <- relevel(
   dat_h2_2011$h2_2011_category,
   ref = "remained uninfested"
 )
 
-if (file.exists(rds_h2_2011)) {
-  m_h2_2011_ht <- readRDS(rds_h2_2011)
+# MM8 priors match mm_waic_comparison_v2.R
+mm_priors_2011 <- c(
+  prior(normal(3.8, 0.5), nlpar = "Vm"),
+  prior(normal(0.5, 0.2), nlpar = "x",  lb = 0.01),
+  prior(normal(30,  20),  nlpar = "K",  lb = 0.01)
+)
+
+# Prepare dataset for MM model (uses raw height m and DBH cm, not log-transformed)
+dat_h2_2011_mm <- dat_h2_2011 |>
+  filter(!is.na(height_2011), !is.na(dbh_2011), !is.na(h2_2011_category)) |>
+  mutate(height = as.numeric(height_2011),
+         dbh    = as.numeric(dbh_2011 / 10))   # mm -> cm
+
+mm8_form_2011 <- brmsformula(
+  log(height) ~ Vm + x * log(dbh) - log(K + (dbh^x)),
+  Vm ~ 1 + h2_2011_category + (1|species),
+  x  ~ 1 + h2_2011_category + (1|species),
+  K  ~ 1 + h2_2011_category + (1|species),
+  nl = TRUE
+)
+
+rds_h2_2011_mm8 <- "models/mm_waic_comparison/H2_2011_mm8.rds"
+
+if (file.exists(rds_h2_2011_mm8)) {
+  m_h2_2011_ht <- readRDS(rds_h2_2011_mm8)
 } else {
-  # "remained uninfested" is the reference; coefficient = effect of gaining infestation.
-  # (1|species) only — sbpltnm dropped because most trees lack subplot records here.
   m_h2_2011_ht <- brm(
-    log_height_2011 ~ log_dbh_2011 + h2_2011_category + (1|species),
-    data    = dat_h2_2011,      # 414 rows, 85 species
-    family  = student(),
+    mm8_form_2011,
+    data    = dat_h2_2011_mm,
+    family  = gaussian(),
+    prior   = mm_priors_2011,
     seed    = 42, chains = 4, cores = 2, iter = 4000, warmup = 1000,
     control = brm_ctrl, silent = 2)
-  saveRDS(m_h2_2011_ht, rds_h2_2011)
+  saveRDS(m_h2_2011_ht, rds_h2_2011_mm8)
+}
+
+cat("══ H2 2011 MM8 model summary ══\n")
+summary(m_h2_2011_ht)
+
+# ── % effects: gained infestation vs remained uninfested ─────────────────────
+fe_mm8 <- fixef(m_h2_2011_ht)
+cat("\n══ Gained infestation effects (MM8 parameters) ══\n")
+for (p in c("Vm", "x", "K")) {
+  term <- paste0(p, "_h2_2011_categorygainedinfestation")
+  if (term %in% rownames(fe_mm8)) {
+    est <- fe_mm8[term, "Estimate"]
+    lo  <- fe_mm8[term, "Q2.5"]
+    hi  <- fe_mm8[term, "Q97.5"]
+    sig <- sign(lo) == sign(hi)
+    cat(sprintf("%s: estimate = %.3f (95%% CrI: %.3f to %.3f) | Credible: %s\n",
+                p, est, lo, hi, sig))
+  }
 }
 
 
@@ -1123,14 +1163,7 @@ top6_2011 <- dat_h2_2011 |>
   pull(species) |> as.character()
 
 
-# % effects: gained infestation relative to remained uninfested (reference)
-cat("2011 height model — % effects (gained vs remained uninfested):\n\n")
-pct_table(m_h2_2011_ht) |>
-  kable(caption = "2011 height model: % effects vs remained uninfested (95% CrI)") |>
-  print()
-
-cat("\n── Headline % effects ──\n")
-report_pct(m_h2_2011_ht) |> paste(collapse = "\n") |> cat()
+# Parameter-level credibility printed above in MM8 summary block.
 
 
 # Figure: same style as the TLS 2019 height figure
@@ -1173,7 +1206,77 @@ save_fig(fig_h2_ht_2011, "H2_height_2011_by_outcome_top6sp.png", width = 16, hei
 
 ```
 
+## DBH vs height (2011) — H2 allometric plot
 
+```{r}
+#| label: app-h2-2011-allom
+#| fig-width: 7
+#| fig-height: 5
+#| fig-cap: >
+#|   Michaelis-Menten (MM8) allometric relationship between trunk diameter
+#|   (DBH, cm) and ground-measured tree height (m) in 2011, for 414 trees
+#|   classified by subsequent infestation outcome (2011–2019). All three MM
+#|   parameters (Vm, x, K) vary by infestation outcome. Lines show Bayesian
+#|   posterior population-level fits; ribbons show 95% credible intervals.
+#|   MM8 was selected over log-log and all other MM formulations on the basis
+#|   of WAIC (see mm_waic_comparison_v2.R; log-log DWAIC = 38.9).
+
+df_2011_mm8 <- dat_h2_2011 |>
+  filter(!is.na(height_2011), !is.na(dbh_2011), !is.na(h2_2011_category)) |>
+  mutate(dbh_cm = dbh_2011 / 10,
+         h2_2011_category = factor(h2_2011_category,
+                                   levels = c("remained uninfested",
+                                              "gained infestation")))
+
+dbh_seq_mm8 <- seq(min(df_2011_mm8$dbh_cm, na.rm = TRUE),
+                   max(df_2011_mm8$dbh_cm, na.rm = TRUE), l = 100)
+
+pred_mm8 <- crossing(
+  dbh_cm           = dbh_seq_mm8,
+  h2_2011_category = c("remained uninfested", "gained infestation")) |>
+  mutate(dbh    = dbh_cm,
+         height = NA_real_)
+
+fv_mm8 <- fitted(m_h2_2011_ht, newdata = pred_mm8, re_formula = NA)
+
+pred_mm8 <- pred_mm8 |>
+  mutate(fit = exp(fv_mm8[, "Estimate"]),
+         ylo = exp(fv_mm8[, "Q2.5"]),
+         yhi = exp(fv_mm8[, "Q97.5"]),
+         lty = "solid")   # MM8 — all parameters credibly differ
+
+fig_h2_2011_allom <- ggplot(df_2011_mm8,
+    aes(dbh_cm, height_2011,
+        colour = h2_2011_category, fill = h2_2011_category)) +
+  geom_point(alpha = 0.30, size = 1.0) +
+  geom_ribbon(data = pred_mm8,
+              aes(x = dbh_cm, ymin = ylo, ymax = yhi,
+                  fill = h2_2011_category),
+              alpha = 0.15, colour = NA,
+              inherit.aes = FALSE) +
+  geom_line(data = pred_mm8,
+            aes(x = dbh_cm, y = fit,
+                colour = h2_2011_category, linetype = lty),
+            linewidth = 0.9,
+            inherit.aes = FALSE) +
+  scale_linetype_identity() +
+  scale_colour_manual(values = pal_h2) +
+  scale_fill_manual(values   = pal_h2) +
+  scale_y_continuous(breaks = seq(10, 60, by = 10)) +
+  labs(x = "DBH (cm)", y = "Tree height (m)",
+       colour = NULL, fill = NULL) +
+  theme_thesis +
+  theme(legend.position  = "bottom",
+        legend.key.width = unit(1.4, "cm"))
+
+fig_h2_2011_allom
+save_fig(fig_h2_2011_allom,
+         "H2_2011_height_vs_dbh.png",
+         14, 10)
+
+
+
+```
 
 # H2b: Infestation Pathway and Climbing Mode
 
@@ -1676,6 +1779,9 @@ save_fig(fig_re_scatter,
          14, 10)
 ```
 
+
+
+
 ## A5: Appendix PAI — top 12 species
 
 ```{r, warning=FALSE}
@@ -2024,3 +2130,4 @@ cat("         all_model_results.xlsx\n")
 #| code-fold: false
 sessionInfo()
 ```
+

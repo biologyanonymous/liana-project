@@ -1,0 +1,9 @@
+Hypothesis,model_id,Description,DWAIC,SE_diff,Converged
+H2 Ground — Tree height 2011 (reference: remained uninfested),mm8,Vm + x + K ~ h2_2011_category (remained uninfested | gained infestation) (full MM),-0,-0,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),mm2,Vm (asymptote) ~ h2_2011_category (remained uninfested | gained infestation),3.4,-4.76,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),mm7,Vm + x ~ h2_2011_category (remained uninfested | gained infestation),3.99,-5.28,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),mm5,x + K ~ h2_2011_category (remained uninfested | gained infestation),4.13,-2.51,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),mm4,K (half-sat.) ~ h2_2011_category (remained uninfested | gained infestation),4.4,-4.12,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),mm3,x (scaling) ~ h2_2011_category (remained uninfested | gained infestation),15.8,-10.2,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),loglog,log(H) ~ log(DBH) + h2_2011_category (remained uninfested | gained infestation) [log-log reference],38.9,-12.2,Yes
+H2 Ground — Tree height 2011 (reference: remained uninfested),H2_2011_mm6,Vm + K ~ h2_2011_category (remained uninfested | gained infestation),NA,NA,No (Rhat > 1.01 or divergent transitions)

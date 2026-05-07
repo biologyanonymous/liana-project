@@ -1,0 +1,9 @@
+Hypothesis,model_id,Description,DWAIC,SE_diff,Converged
+H1 — Tree height (reference: Never infested),loglog,log(H) ~ log(DBH) + H1_category (Never infested | Lost lianas | Persistently infested) [log-log reference],-0,-0,Yes
+H1 — Tree height (reference: Never infested),mm4,K (half-sat.) ~ H1_category (Never infested | Lost lianas | Persistently infested),12,-20.7,Yes
+H1 — Tree height (reference: Never infested),mm5,x + K ~ H1_category (Never infested | Lost lianas | Persistently infested),13.9,-20.7,Yes
+H1 — Tree height (reference: Never infested),mm6,Vm + K ~ H1_category (Never infested | Lost lianas | Persistently infested),29.9,-16.8,Yes
+H1 — Tree height (reference: Never infested),mm8,Vm + x + K ~ H1_category (Never infested | Lost lianas | Persistently infested) (full MM),33.9,-17,Yes
+H1 — Tree height (reference: Never infested),mm3,x (scaling) ~ H1_category (Never infested | Lost lianas | Persistently infested),52.6,-19.7,Yes
+H1 — Tree height (reference: Never infested),H1_mm2,Vm (asymptote) ~ H1_category (Never infested | Lost lianas | Persistently infested),NA,NA,No (Rhat > 1.01 or divergent transitions)
+H1 — Tree height (reference: Never infested),H1_mm7,Vm + x ~ H1_category (Never infested | Lost lianas | Persistently infested),NA,NA,No (Rhat > 1.01 or divergent transitions)

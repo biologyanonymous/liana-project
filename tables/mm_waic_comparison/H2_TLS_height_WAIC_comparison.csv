@@ -1,0 +1,9 @@
+Hypothesis,model_id,Description,DWAIC,SE_diff,Converged
+H2 TLS — Tree height 2019 (reference: remained uninfested),loglog,log(H) ~ log(DBH) + H2_category (remained uninfested | gained infestation) [log-log reference],-0,-0,Yes
+H2 TLS — Tree height 2019 (reference: remained uninfested),mm5,x + K ~ H2_category (remained uninfested | gained infestation),23.9,-15.7,Yes
+H2 TLS — Tree height 2019 (reference: remained uninfested),mm3,x (scaling) ~ H2_category (remained uninfested | gained infestation),29.4,-16.8,Yes
+H2 TLS — Tree height 2019 (reference: remained uninfested),mm7,Vm + x ~ H2_category (remained uninfested | gained infestation),31.7,-16.3,Yes
+H2 TLS — Tree height 2019 (reference: remained uninfested),mm8,Vm + x + K ~ H2_category (remained uninfested | gained infestation) (full MM),38,-15.4,Yes
+H2 TLS — Tree height 2019 (reference: remained uninfested),mm6,Vm + K ~ H2_category (remained uninfested | gained infestation),38.3,-15.4,Yes
+H2 TLS — Tree height 2019 (reference: remained uninfested),H2_TLS_mm2,Vm (asymptote) ~ H2_category (remained uninfested | gained infestation),NA,NA,No (Rhat > 1.01 or divergent transitions)
+H2 TLS — Tree height 2019 (reference: remained uninfested),H2_TLS_mm4,K (half-sat.) ~ H2_category (remained uninfested | gained infestation),NA,NA,No (Rhat > 1.01 or divergent transitions)
