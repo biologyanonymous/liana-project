@@ -404,43 +404,65 @@ elig_h1 <- {
 }
 ```
 
-## H1 slenderness: one-way ANOVA {#sec-h1-slender-anova}
+## H1 slenderness: Bayesian multilevel model {#sec-h1-slender-anova}
 
 ```{r}
 #| label: h1-slender-anova
 
-# Slenderness (height/DBH) is modelled as a simple one-way ANOVA rather than
-# a brms LMM because DBH is algebraically embedded in the ratio, making an
-# additional allometric covariate redundant.
+# Slenderness (height/DBH) is modelled without log(DBH) as a fixed effect
+# because DBH is algebraically embedded in the ratio, making an additional
+# allometric covariate redundant. Species and subplot random intercepts are
+# included for consistency with all other brms models.
 # Reference level: Never infested.
 
 dat_h1_sl <- dat_h1 |> filter(!is.na(H1_category), !is.na(log_slender))
 
-aov_h1_slender <- aov(log_slender ~ H1_category, data = dat_h1_sl)
-cat("── H1 slenderness ANOVA ──\n")
-print(summary(aov_h1_slender))
+rds_h1_sl <- file.path(model_dir, "m_h1_slender.rds")
 
-# Pairwise Tukey comparisons (used to annotate violin plot)
-tukey_h1_sl <- TukeyHSD(aov_h1_slender)$H1_category
-cat("\n── Tukey HSD pairwise comparisons ──\n")
-print(round(tukey_h1_sl, 4))
+if (file.exists(rds_h1_sl)) {
+  m_h1_slender <- readRDS(rds_h1_sl)
+} else {
+  m_h1_slender <- brm(
+    log_slender ~ H1_category + (1|species) + (1|sbpltnm),
+    data    = dat_h1_sl,
+    family  = student(),
+    seed    = 42, chains = 4, cores = 2, iter = 4000, warmup = 1000,
+    control = brm_ctrl, silent = 2
+  )
+  saveRDS(m_h1_slender, rds_h1_sl)
+}
 
-pval_sl_lost  <- tukey_h1_sl["Lost lianas-Never infested",       "p adj"]
-pval_sl_pers  <- tukey_h1_sl["Persistently infested-Never infested", "p adj"]
+cat("── H1 slenderness brms model summary ──\n")
+print(summary(m_h1_slender))
 
-# Estimated marginal means → % effect vs Never infested
-emm_h1_sl <- emmeans(aov_h1_slender, ~ H1_category)
-cat("\n── Estimated marginal means (log scale) ──\n")
-print(emm_h1_sl)
+# % effects and credibility vs Never infested
+fe_h1_sl <- fixef(m_h1_slender)
+cat("\n── Fixed effects ──\n")
+print(round(fe_h1_sl, 4))
 
-emm_h1_sl_df <- as.data.frame(emm_h1_sl)
-ref_h1_sl    <- emm_h1_sl_df$emmean[emm_h1_sl_df$H1_category == "Never infested"]
+# Extract p-values (posterior direction probability) for violin annotation
+brm_pval_sl <- function(term) {
+  post <- as_draws_df(m_h1_slender)[[paste0("b_", term)]]
+  p    <- mean(post > 0)
+  2 * min(p, 1 - p)
+}
 
-emm_h1_sl_df <- emm_h1_sl_df |>
-  mutate(pct_effect = round((exp(emmean - ref_h1_sl) - 1) * 100, 1))
+pval_sl_lost <- brm_pval_sl("H1_categoryLostlianas")
+pval_sl_pers <- brm_pval_sl("H1_categoryPersistentlyinfested")
 
-cat("\n── % effect vs Never infested ──\n")
-print(select(emm_h1_sl_df, H1_category, emmean, SE, pct_effect))
+# % effects
+cat("\n── % effects vs Never infested ──\n")
+for (term in c("H1_categoryLostlianas", "H1_categoryPersistentlyinfested")) {
+  est <- fe_h1_sl[term, "Estimate"]
+  lo  <- fe_h1_sl[term, "Q2.5"]
+  hi  <- fe_h1_sl[term, "Q97.5"]
+  pct <- round((exp(est) - 1) * 100, 1)
+  sig <- sign(lo) == sign(hi)
+  cat(sprintf("%s: %.1f%% (95%% CrI: %.1f to %.1f%%) | Credible: %s\n",
+              term, pct,
+              round((exp(lo) - 1) * 100, 1),
+              round((exp(hi) - 1) * 100, 1), sig))
+}
 ```
 
 ## Results: % effects with 95% credible intervals {#sec-h1-results}
@@ -579,60 +601,6 @@ fig_h1   # display inline
 save_fig(fig_h1, "H1_crown_metrics_vs_dbh_4panel.png", width = 16, height = 14)
 ```
 
-## Figure: Slenderness and crown base height ratio
-
-```{r}
-#| label: h1-slender-cbh
-#| fig-width: 7
-#| fig-height: 4
-#| fig-cap: >
-#|   **H1 (supporting):** Slenderness (height/DBH) and crown base height
-#|   ratio by infestation history. Violin plots used because DBH is
-#|   algebraically embedded in these ratios (allometric regression not shown).
-#|   Annotated p-values are posterior-direction probabilities from brms.
-
-pval_cbh_lost <- brm_pval(m_h1$cbh,     "Lost")
-pval_cbh_pers <- brm_pval(m_h1$cbh,     "Persistently")
-
-make_violin_h1 <- function(data, yvar, ylabel, p_lost, p_pers) {
-  ymax <- max(data[[yvar]], na.rm = TRUE)
-  bump <- (ymax - min(data[[yvar]], na.rm = TRUE)) * 0.06
-  ggplot(filter(data, !is.na(H1_category)),
-         aes_string("H1_category", yvar,
-                    colour = "H1_category", fill = "H1_category")) +
-    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
-    geom_boxplot(width = 0.18, outlier.shape = NA,
-                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
-    geom_jitter(width = 0.12, height = 0, alpha = 0.40, size = 1.0) +
-    annotate("text", x = 2, y = ymax + bump * 2,
-         label = if_else(p_lost < 0.05, p_label(p_lost), "ns"),
-         parse = p_lost < 0.05,
-         hjust = 0.5, size = 3.2, colour = "grey20") +
-  annotate("text", x = 3, y = ymax + bump * 4,
-         label = if_else(p_pers < 0.05, p_label(p_pers), "ns"),
-         parse = p_pers < 0.05,
-         hjust = 0.5, size = 3.2, colour = "grey20")+
-    scale_colour_manual(values = pal_h1) +
-    scale_fill_manual(values   = pal_h1) +
-    labs(x = "Infestation history", y = ylabel) +
-    theme_thesis + theme(legend.position = "none",
-                         axis.text.x = element_text(angle = 20, hjust = 1))
-}
-
-fig_h1_supp <- plot_grid(
-  label_panel(make_violin_h1(dat_h1, "slenderness",
-                              "Slenderness (height / DBH)",
-                              pval_sl_lost, pval_sl_pers), "a"),
-  label_panel(make_violin_h1(dat_h1, "cbh_ratio",
-                              "Crown base height ratio",
-                              pval_cbh_lost, pval_cbh_pers), "b"),
-  nrow = 1, align = "hv")
-
-fig_h1_supp
-save_fig(fig_h1_supp, "H1_slenderness_cbh_ratio.png", width = 16, height = 9)
-```
-
----
 
 # H1: Liana Impact on Host Plant Area Index
 
@@ -835,32 +803,53 @@ elig_h2_re <- dat_h2 |>
   pull(species) |> as.character()
 ```
 
-## H2 slenderness: one-way ANOVA {#sec-h2-slender-anova}
+## H2 slenderness: Bayesian multilevel model {#sec-h2-slender-anova}
 
 ```{r}
 #| label: h2-slender-anova
 
 dat_h2_sl <- dat_h2 |> filter(!is.na(H2_category), !is.na(log_slender))
 
-aov_h2_slender <- aov(log_slender ~ H2_category, data = dat_h2_sl)
-cat("── H2 slenderness ANOVA ──\n")
-print(summary(aov_h2_slender))
+rds_h2_sl <- file.path(model_dir, "m_h2_slender.rds")
 
-tukey_h2_sl <- TukeyHSD(aov_h2_slender)$H2_category
-cat("\n── Tukey HSD pairwise comparisons ──\n")
-print(round(tukey_h2_sl, 4))
+if (file.exists(rds_h2_sl)) {
+  m_h2_slender <- readRDS(rds_h2_sl)
+} else {
+  m_h2_slender <- brm(
+    log_slender ~ H2_category + (1|species) + (1|sbpltnm),
+    data    = dat_h2_sl,
+    family  = student(),
+    seed    = 42, chains = 4, cores = 2, iter = 4000, warmup = 1000,
+    control = brm_ctrl, silent = 2
+  )
+  saveRDS(m_h2_slender, rds_h2_sl)
+}
 
-pval_sl_gained_h2 <- tukey_h2_sl["gained infestation-remained uninfested", "p adj"]
+cat("── H2 slenderness brms model summary ──\n")
+print(summary(m_h2_slender))
 
-emm_h2_sl <- emmeans(aov_h2_slender, ~ H2_category)
-emm_h2_sl_df <- as.data.frame(emm_h2_sl)
-ref_h2_sl    <- emm_h2_sl_df$emmean[emm_h2_sl_df$H2_category == "remained uninfested"]
+fe_h2_sl <- fixef(m_h2_slender)
+cat("\n── Fixed effects ──\n")
+print(round(fe_h2_sl, 4))
 
-emm_h2_sl_df <- emm_h2_sl_df |>
-  mutate(pct_effect = round((exp(emmean - ref_h2_sl) - 1) * 100, 1))
+brm_pval_sl_h2 <- function(term) {
+  post <- as_draws_df(m_h2_slender)[[paste0("b_", term)]]
+  p    <- mean(post > 0)
+  2 * min(p, 1 - p)
+}
+
+pval_sl_gained_h2 <- brm_pval_sl_h2("H2_categorygainedinfestation")
 
 cat("\n── % effect vs remained uninfested ──\n")
-print(select(emm_h2_sl_df, H2_category, emmean, SE, pct_effect))
+term <- "H2_categorygainedinfestation"
+est  <- fe_h2_sl[term, "Estimate"]
+lo   <- fe_h2_sl[term, "Q2.5"]
+hi   <- fe_h2_sl[term, "Q97.5"]
+pct  <- round((exp(est) - 1) * 100, 1)
+sig  <- sign(lo) == sign(hi)
+cat(sprintf("Gained infestation: %.1f%% (95%% CrI: %.1f to %.1f%%) | Credible: %s\n",
+            pct, round((exp(lo) - 1) * 100, 1),
+            round((exp(hi) - 1) * 100, 1), sig))
 ```
 
 ## Results
@@ -965,6 +954,145 @@ save_fig(fig_h2, "H2_crown_metrics_vs_dbh_4panel.png", width = 16, height = 14)
 
 
 
+
+
+
+## DBH vs height (2011) — H2 allometric plot
+
+```{r}
+#| label: app-h2-2011-allom
+#| fig-width: 7
+#| fig-height: 5
+#| fig-cap: >
+#|   Michaelis-Menten (MM8) allometric relationship between trunk diameter
+#|   (DBH, cm) and ground-measured tree height (m) in 2011, for 414 trees
+#|   classified by subsequent infestation outcome (2011–2019). All three MM
+#|   parameters (Vm, x, K) vary by infestation outcome. Lines show Bayesian
+#|   posterior population-level fits; ribbons show 95% credible intervals.
+#|   MM8 was selected over log-log and all other MM formulations on the basis
+#|   of WAIC (see mm_waic_comparison_v2.R; log-log DWAIC = 38.9).
+
+# Always load from the mm_waic_comparison folder — this is the MM8 model
+H2_2011_mm8 <- readRDS("models/mm_waic_comparison/H2_2011_mm8.rds")
+
+# Verify correct model
+cat("Model columns:", names(H2_2011_mm8$data), "\n")
+# Should show: height  dbh  h2_2011_category  species
+
+df_2011_mm8 <- dat_h2_2011 |>
+  filter(!is.na(height_2011), !is.na(dbh_2011), !is.na(h2_2011_category)) |>
+  mutate(dbh_cm           = dbh_2011 / 10,
+         h2_2011_category = factor(h2_2011_category,
+                                   levels = c("remained uninfested",
+                                              "gained infestation")))
+
+dbh_seq_mm8 <- seq(min(df_2011_mm8$dbh_cm, na.rm = TRUE),
+                   max(df_2011_mm8$dbh_cm, na.rm = TRUE), l = 100)
+
+pred_mm8 <- crossing(
+  dbh_cm           = dbh_seq_mm8,
+  h2_2011_category = c("remained uninfested", "gained infestation")) |>
+  mutate(dbh     = dbh_cm,
+         height  = NA_real_,
+         species = NA_character_)
+
+fv_mm8 <- fitted(H2_2011_mm8, newdata = pred_mm8, re_formula = NA)
+
+pred_mm8 <- pred_mm8 |>
+  mutate(fit = exp(fv_mm8[, "Estimate"]),
+         ylo = exp(fv_mm8[, "Q2.5"]),
+         yhi = exp(fv_mm8[, "Q97.5"]),
+         lty = "solid")
+
+fig_h2_2011_allom <- ggplot(df_2011_mm8,
+    aes(dbh_cm, height_2011,
+        colour = h2_2011_category, fill = h2_2011_category)) +
+  geom_point(alpha = 0.30, size = 1.0) +
+  geom_ribbon(data = pred_mm8,
+              aes(x = dbh_cm, ymin = ylo, ymax = yhi,
+                  fill = h2_2011_category),
+              alpha = 0.15, colour = NA,
+              inherit.aes = FALSE) +
+  geom_line(data = pred_mm8,
+            aes(x = dbh_cm, y = fit,
+                colour = h2_2011_category, linetype = lty),
+            linewidth = 0.9,
+            inherit.aes = FALSE) +
+  scale_linetype_identity() +
+  scale_colour_manual(values = pal_h2) +
+  scale_fill_manual(values   = pal_h2) +
+  scale_y_continuous(breaks = seq(10, 60, by = 10)) +
+  labs(x = "DBH (cm)", y = "Tree height (m)",
+       colour = NULL, fill = NULL) +
+  theme_thesis +
+  theme(legend.position  = "bottom",
+        legend.key.width = unit(1.4, "cm"))
+
+fig_h2_2011_allom
+save_fig(fig_h2_2011_allom,
+         file.path("random_effects", "H2_2011_height_vs_dbh.png"),
+         14, 10)
+```
+
+
+
+
+## A1b: Slenderness and crown base height ratio — H1 and H2
+
+## Figure: Slenderness and crown base height ratio
+
+```{r}
+#| label: h1-slender-cbh
+#| fig-width: 7
+#| fig-height: 4
+#| fig-cap: >
+#|   **H1 (supporting):** Slenderness (height/DBH) and crown base height
+#|   ratio by infestation history. Violin plots used because DBH is
+#|   algebraically embedded in these ratios (allometric regression not shown).
+#|   Annotated p-values are posterior-direction probabilities from brms.
+
+pval_cbh_lost <- brm_pval(m_h1$cbh,     "Lost")
+pval_cbh_pers <- brm_pval(m_h1$cbh,     "Persistently")
+make_violin_h1 <- function(data, yvar, ylabel, p_lost, p_pers) {
+  ymax <- max(data[[yvar]], na.rm = TRUE)
+  bump <- (ymax - min(data[[yvar]], na.rm = TRUE)) * 0.06
+  ggplot(filter(data, !is.na(H1_category)),
+         aes_string("H1_category", yvar,
+                    colour = "H1_category", fill = "H1_category")) +
+    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
+    geom_boxplot(width = 0.18, outlier.shape = NA,
+                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
+    geom_jitter(width = 0.12, height = 0, alpha = 0.40, size = 1.0) +
+    annotate("text", x = 2, y = ymax + bump * 2,
+         label = if_else(p_lost < 0.05, p_label(p_lost), "ns"),
+         parse = p_lost < 0.05,
+         hjust = 0.5, size = 3.2, colour = "grey20") +
+  annotate("text", x = 3, y = ymax + bump * 4,
+         label = if_else(p_pers < 0.05, p_label(p_pers), "ns"),
+         parse = p_pers < 0.05,
+         hjust = 0.5, size = 3.2, colour = "grey20")+
+    scale_colour_manual(values = pal_h1) +
+    scale_fill_manual(values   = pal_h1) +
+    labs(x = "Infestation history", y = ylabel) +
+    theme_thesis + theme(legend.position = "none",
+                         axis.text.x = element_text(angle = 20, hjust = 1))
+}
+
+fig_h1_supp <- plot_grid(
+  label_panel(make_violin_h1(dat_h1, "slenderness",
+                              "Slenderness (height / DBH)",
+                              pval_sl_lost, pval_sl_pers), "a"),
+  label_panel(make_violin_h1(dat_h1, "cbh_ratio",
+                              "Crown base height ratio",
+                              pval_cbh_lost, pval_cbh_pers), "b"),
+  nrow = 1, align = "hv")
+
+fig_h1_supp
+save_fig(fig_h1_supp, "H1_slenderness_cbh_ratio.png", width = 16, height = 9)
+```
+
+---
+
 ## Figure: H2 slenderness and crown base height ratio
 
 ```{r}
@@ -1012,277 +1140,7 @@ fig_h2_supp
 save_fig(fig_h2_supp, "H2_slenderness_cbh_ratio.png", width = 16, height = 9)
 ```
 
-## Figure: Initial tree height (TLS 2019) by subsequent infestation outcome
-
-```{r}
-#| label: h2-height-by-species
-#| fig-width: 7
-#| fig-height: 5
-#| fig-cap: >
-#|   **H2 (exploratory):** Distribution of 2019 TLS height for trees that
-#|   subsequently gained infestation vs remained uninfested, shown for the
-#|   6 most-represented species. The pooled model shows no credible
-#|   height difference between outcomes (95% CrI spans zero).
-
-# Top 6 species 
-# For fig_h2_ht (TLS 2019)
-top6_h2_sp <- dat_h2 |>
-  filter(species != "Pouteria reticulata") |>
-  count(species) |>
-  slice_max(n, n = 6) |>
-  pull(species) |>
-  as.character()
-# Pooled model p-value for annotation
-h2_ht_pval <- brm_pval(m_h2_lmm$height, "gained")
-
-fig_h2_ht <- dat_h2 |>
-  filter(as.character(species) %in% top6_h2_sp) |>
-mutate(
-  H2_category = factor(
-    H2_category,
-    levels = c("remained uninfested", "gained infestation")
-  ),
-  species = factor(as.character(species), levels = top6_h2_sp))|>
-  ggplot(aes(H2_category, height, colour = H2_category, fill = H2_category)) +
-    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
-    geom_boxplot(width = 0.18, outlier.shape = NA,
-                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
-    geom_jitter(width = 0.12, height = 0, alpha = 0.50, size = 1.2) +
-    facet_wrap(~ species, scales = "free_y", ncol = 3) +
-    scale_colour_manual(values = pal_h2) +
-    scale_fill_manual(values   = pal_h2) +
-    labs(x = "Infestation outcome (2019–2025)",
-         y = "Tree height — TLS 2019 (m)") +
-    theme_thesis +
-theme(
-  legend.position = "none",
-  axis.text.x     = element_text(angle = 20, hjust = 1),
-  strip.text      = element_text(face = "italic"),
-  plot.margin     = margin(6, 8, 6, 20)   # increase left margin (last value)
-) +
-coord_cartesian(clip = "off")
-
-fig_h2_ht
-save_fig(fig_h2_ht, "H2_height_by_outcome_top6sp.png", width = 16, height = 10)
-
-
-
-```
-
-
-
-```{r}
-#| label: h2-height-2011
-#| fig-width: 7
-#| fig-height: 5
-#| fig-cap: >
-#|   **H2 (exploratory, larger sample):** Distribution of ground-measured
-#|   height (2011) for trees that subsequently gained liana infestation vs
-#|   remained uninfested by 2019, shown for the 6 most-represented species.
-#|   Analysis period 2011–2019; n larger than the TLS dataset because
-#|   field heights were recorded across all dendrometer subplots.
-
-# Sample overview
-cat("2011 height dataset — n by outcome:\n")
-print(count(dat_h2_2011, h2_2011_category))
-cat("Species represented:", n_distinct(dat_h2_2011$species), "\n\n")
-
-# ── H2 2011 height model: Michaelis-Menten MM8 ───────────────────────────────
-# Model selection via WAIC comparison (see mm_waic_comparison_v2.R) showed the
-# log-log model was strongly disfavoured for the 2011 dataset (DWAIC = 38.9),
-# while the MM8 formulation (Vm + x + K all varying by infestation outcome)
-# was the best-fitting converged model. Log-log was retained for H1 and H2 TLS
-# where it was decisively preferred (DWAIC > 12 for all MM alternatives).
-# Reference category = "remained uninfested".
-
-dat_h2_2011$h2_2011_category <- factor(dat_h2_2011$h2_2011_category)
-dat_h2_2011$h2_2011_category <- relevel(
-  dat_h2_2011$h2_2011_category,
-  ref = "remained uninfested"
-)
-
-# MM8 priors match mm_waic_comparison_v2.R
-mm_priors_2011 <- c(
-  prior(normal(3.8, 0.5), nlpar = "Vm"),
-  prior(normal(0.5, 0.2), nlpar = "x",  lb = 0.01),
-  prior(normal(30,  20),  nlpar = "K",  lb = 0.01)
-)
-
-# Prepare dataset for MM model (uses raw height m and DBH cm, not log-transformed)
-dat_h2_2011_mm <- dat_h2_2011 |>
-  filter(!is.na(height_2011), !is.na(dbh_2011), !is.na(h2_2011_category)) |>
-  mutate(height = as.numeric(height_2011),
-         dbh    = as.numeric(dbh_2011 / 10))   # mm -> cm
-
-mm8_form_2011 <- brmsformula(
-  log(height) ~ Vm + x * log(dbh) - log(K + (dbh^x)),
-  Vm ~ 1 + h2_2011_category + (1|species),
-  x  ~ 1 + h2_2011_category + (1|species),
-  K  ~ 1 + h2_2011_category + (1|species),
-  nl = TRUE
-)
-
-rds_h2_2011_mm8 <- "models/mm_waic_comparison/H2_2011_mm8.rds"
-
-if (file.exists(rds_h2_2011_mm8)) {
-  m_h2_2011_ht <- readRDS(rds_h2_2011_mm8)
-} else {
-  m_h2_2011_ht <- brm(
-    mm8_form_2011,
-    data    = dat_h2_2011_mm,
-    family  = gaussian(),
-    prior   = mm_priors_2011,
-    seed    = 42, chains = 4, cores = 2, iter = 4000, warmup = 1000,
-    control = brm_ctrl, silent = 2)
-  saveRDS(m_h2_2011_ht, rds_h2_2011_mm8)
-}
-
-cat("══ H2 2011 MM8 model summary ══\n")
-summary(m_h2_2011_ht)
-
-# ── % effects: gained infestation vs remained uninfested ─────────────────────
-fe_mm8 <- fixef(m_h2_2011_ht)
-cat("\n══ Gained infestation effects (MM8 parameters) ══\n")
-for (p in c("Vm", "x", "K")) {
-  term <- paste0(p, "_h2_2011_categorygainedinfestation")
-  if (term %in% rownames(fe_mm8)) {
-    est <- fe_mm8[term, "Estimate"]
-    lo  <- fe_mm8[term, "Q2.5"]
-    hi  <- fe_mm8[term, "Q97.5"]
-    sig <- sign(lo) == sign(hi)
-    cat(sprintf("%s: estimate = %.3f (95%% CrI: %.3f to %.3f) | Credible: %s\n",
-                p, est, lo, hi, sig))
-  }
-}
-
-
-# Top 6 species for fig_h2_ht_2011
-top6_2011 <- dat_h2_2011 |>
-  count(species) |>
-  slice_max(n, n = 6) |>
-  pull(species) |> as.character()
-
-
-# Parameter-level credibility printed above in MM8 summary block.
-
-
-# Figure: same style as the TLS 2019 height figure
-fig_h2_ht_2011 <- dat_h2_2011 |>
-  filter(as.character(species) %in% top6_2011) |>
-  mutate(
-    species = factor(as.character(species), levels = top6_2011),
-    species = recode(species,
-      "QUARAS" = "Quararibea asterolepis",
-      "JAC1CO" = "Jacaranda copaia",
-      "PRI2CO" = "Prioria copaifera",
-      "TRI2TU" = "Trichilia tuberculata",
-      "CECRIN" = "Cecropia insignis",
-      "ALSEBL" = "Alseis blackiana"
-    )
-  ) |>
-  ggplot(aes(h2_2011_category, height_2011,
-             colour = h2_2011_category, fill = h2_2011_category)) +
-    geom_violin(alpha = 0.18, linewidth = 0.6, trim = FALSE) +
-    geom_boxplot(width = 0.18, outlier.shape = NA,
-                 alpha = 0.50, linewidth = 0.6, colour = "grey20") +
-    geom_jitter(width = 0.12, height = 0, alpha = 0.50, size = 1.2) +
-    facet_wrap(~ species, scales = "free_y", ncol = 3) +
-    scale_colour_manual(values = pal_h2) +
-    scale_fill_manual(values   = pal_h2) +
-    labs(x = "Infestation outcome (2011–2019)",
-         y = "Tree height — ground-measured 2011 (m)") +
-    theme_thesis +
-    theme(
-      legend.position = "none",
-      axis.text.x     = element_text(angle = 20, hjust = 1),
-      strip.text      = element_text(face = "italic"),
-      plot.margin     = margin(6, 8, 6, 25)   # increase left margin (last value)
-    ) +
-    coord_cartesian(clip = "off")
-
-fig_h2_ht_2011
-save_fig(fig_h2_ht_2011, "H2_height_2011_by_outcome_top6sp.png", width = 16, height = 10)
-
-
-```
-
-## DBH vs height (2011) — H2 allometric plot
-
-```{r}
-#| label: app-h2-2011-allom
-#| fig-width: 7
-#| fig-height: 5
-#| fig-cap: >
-#|   Michaelis-Menten (MM8) allometric relationship between trunk diameter
-#|   (DBH, cm) and ground-measured tree height (m) in 2011, for 414 trees
-#|   classified by subsequent infestation outcome (2011–2019). All three MM
-#|   parameters (Vm, x, K) vary by infestation outcome. Lines show Bayesian
-#|   posterior population-level fits; ribbons show 95% credible intervals.
-#|   MM8 was selected over log-log and all other MM formulations on the basis
-#|   of WAIC (see mm_waic_comparison_v2.R; log-log DWAIC = 38.9).
-
-df_2011_mm8 <- dat_h2_2011 |>
-  filter(!is.na(height_2011), !is.na(dbh_2011), !is.na(h2_2011_category)) |>
-  mutate(dbh_cm = dbh_2011 / 10,
-         h2_2011_category = factor(h2_2011_category,
-                                   levels = c("remained uninfested",
-                                              "gained infestation")))
-
-dbh_seq_mm8 <- seq(min(df_2011_mm8$dbh_cm, na.rm = TRUE),
-                   max(df_2011_mm8$dbh_cm, na.rm = TRUE), l = 100)
-
-pred_mm8 <- crossing(
-  dbh_cm           = dbh_seq_mm8,
-  h2_2011_category = c("remained uninfested", "gained infestation")) |>
-  mutate(dbh    = dbh_cm,
-         height = NA_real_)
-
-fv_mm8 <- fitted(m_h2_2011_ht, newdata = pred_mm8, re_formula = NA)
-
-pred_mm8 <- pred_mm8 |>
-  mutate(fit = exp(fv_mm8[, "Estimate"]),
-         ylo = exp(fv_mm8[, "Q2.5"]),
-         yhi = exp(fv_mm8[, "Q97.5"]),
-         lty = "solid")   # MM8 — all parameters credibly differ
-
-fig_h2_2011_allom <- ggplot(df_2011_mm8,
-    aes(dbh_cm, height_2011,
-        colour = h2_2011_category, fill = h2_2011_category)) +
-  geom_point(alpha = 0.30, size = 1.0) +
-  geom_ribbon(data = pred_mm8,
-              aes(x = dbh_cm, ymin = ylo, ymax = yhi,
-                  fill = h2_2011_category),
-              alpha = 0.15, colour = NA,
-              inherit.aes = FALSE) +
-  geom_line(data = pred_mm8,
-            aes(x = dbh_cm, y = fit,
-                colour = h2_2011_category, linetype = lty),
-            linewidth = 0.9,
-            inherit.aes = FALSE) +
-  scale_linetype_identity() +
-  scale_colour_manual(values = pal_h2) +
-  scale_fill_manual(values   = pal_h2) +
-  scale_y_continuous(breaks = seq(10, 60, by = 10)) +
-  labs(x = "DBH (cm)", y = "Tree height (m)",
-       colour = NULL, fill = NULL) +
-  theme_thesis +
-  theme(legend.position  = "bottom",
-        legend.key.width = unit(1.4, "cm"))
-
-fig_h2_2011_allom
-save_fig(fig_h2_2011_allom,
-         "H2_2011_height_vs_dbh.png",
-         14, 10)
-
-
-
-```
-
-# H2b: Infestation Pathway and Climbing Mode
-
-> **Question:** Is infestation pathway (Direct/Lateral/Both) or liana climbing
-> class (Active/Passive) associated with subsequent infestation outcome or crown
-> architecture?
+## A1c: Infestation Pathway and Climbing Mode
 
 ## §7 Pathway × outcome chi-square test
 
@@ -1556,77 +1414,6 @@ save_fig(fig_classes, "H2b_active_passive_by_species.png",  width = 14, height =
 
 # Appendix
 
-## A1: Height model comparison — log-log vs Michaelis-Menten
-
-```{r}
-#| label: app-mm-comparison
-
-# Tests whether liana effects on height reflect an intercept shift in the
-# log-log allometry (our main model) vs a change in asymptotic max height
-# or the half-saturation constant (Michaelis-Menten alternatives).
-# Rule: if ΔAIC(MM vs log-log) > 2, retain log-log.
-
-dat_h1_ht <- dat_h1 |>
-  filter(is.finite(height), is.finite(dbh_cm), dbh_cm > 0, height > 0)
-
-sv_asym <- quantile(dat_h1_ht$height, 0.95)
-sv_half <- median(dat_h1_ht$dbh_cm)
-
-# Reference: log-log lmer (REML = FALSE for fair AIC comparison)
-m_loglog_ht <- lmer(log_height ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
-                    data = dat_h1_ht, REML = FALSE)
-
-# Helper: try nlme MM model; return NULL on convergence failure
-try_nlme <- function(fixed_formula, start_vals, label) {
-  tryCatch(
-    nlme(height ~ (Asym * dbh_cm) / (half + dbh_cm),
-         fixed   = fixed_formula, random = Asym ~ 1 | species,
-         data    = dat_h1_ht, start = start_vals,
-         control = nlmeControl(maxIter = 300, msMaxIter = 300, pnlsTol = 0.02)),
-    error = function(e) { message(label, " failed: ", conditionMessage(e)); NULL }
-  )
-}
-
-m_mm_asym <- try_nlme(
-  fixed_formula = list(Asym ~ H1_category, half ~ 1),
-  start_vals    = c(Asym = sv_asym,
-                    `Asym.H1_categoryLost lianas` = 0,
-                    `Asym.H1_categoryPersistently infested` = 0,
-                    half = sv_half),
-  label = "MM (Asym only)")
-
-m_mm_half <- try_nlme(
-  fixed_formula = list(Asym ~ 1, half ~ H1_category),
-  start_vals    = c(Asym = sv_asym, half = sv_half,
-                    `half.H1_categoryLost lianas` = 0,
-                    `half.H1_categoryPersistently infested` = 0),
-  label = "MM (half only)")
-
-# Comparison table
-make_row <- function(mod, label) {
-  if (is.null(mod))
-    return(tibble(Model = label, AIC = NA, BIC = NA, `ΔAIC vs log-log` = NA,
-                  Verdict = "did not converge"))
-  tibble(Model = label, AIC = round(AIC(mod), 1), BIC = round(BIC(mod), 1),
-         `ΔAIC vs log-log` = round(AIC(mod) - AIC(m_loglog_ht), 1),
-         Verdict = if_else(AIC(mod) - AIC(m_loglog_ht) > 2,
-                           "log-log preferred", "similar fit"))
-}
-
-tbl_height_compare <- bind_rows(
-  tibble(Model = "log(H) ~ log(DBH) [log-log lmer]",
-         AIC = round(AIC(m_loglog_ht), 1), BIC = round(BIC(m_loglog_ht), 1),
-         `ΔAIC vs log-log` = 0, Verdict = "← reference"),
-  make_row(m_mm_asym, "MM: Asym ~ H1_category, half ~ 1"),
-  make_row(m_mm_half, "MM: Asym ~ 1, half ~ H1_category"))
-
-tbl_height_compare |>
-  kable(caption = "Height model comparison: log-log vs Michaelis-Menten alternatives")
-
-write_csv(tbl_height_compare,
-          file.path(tables_dir, "height_model_comparison_loglog_vs_MM.csv"))
-```
-
 ## A2: Interaction model — does infestation change the height–DBH slope?
 
 ```{r}
@@ -1691,7 +1478,7 @@ save_diag(m_pai_main, "H1_PAI")
 iwalk(m_h2_lmm, ~ save_diag(.x, paste0("H2_", .y)))
 
 # H2 2011 height model
-save_diag(m_h2_2011_ht, "H2_height_2011")
+save_diag(H2_2011_mm8, "H2_height_2011")
 ```
 
 ## A3: Random-effects plots — H1 species intercepts
@@ -1842,6 +1629,53 @@ save_fig(fig_pai_sp, "APPENDIX_H1_PAI_top12_species.png", width = 18, height = 2
 ```
 
 
+## A5b: Exploratory — liana load intensity in persistently infested trees {#sec-load-persist}
+
+```{r}
+#| label: app-load-persist
+#| message: false
+
+load_duration <- dat_h1 |>
+  filter(H1_category == "Persistently infested",
+         !is.na(lianas_2019), lianas_2019 > 0) |>
+  mutate(
+    # years infested = number of years with score > 0 from 2011-2019
+n_years_infested = rowSums(
+  across(paste0("lianas_", 2011:2019), ~ !is.na(.x) & .x > 0),
+  na.rm = TRUE
+),
+    load_2019 = case_when(
+      lianas_2019 %in% 1:2 ~ "Light (1-50%)",
+      lianas_2019 %in% 3:4 ~ "Heavy (51-100%)"
+    )
+  ) |>
+  select(tag6, species, n_years_infested, lianas_2019, load_2019)
+
+# Summary: mean duration by load category
+load_duration |>
+  group_by(load_2019) |>
+  summarise(
+    n             = n(),
+    mean_years    = round(mean(n_years_infested), 1),
+    median_years  = median(n_years_infested),
+    sd_years      = round(sd(n_years_infested), 1)
+  )
+
+# Test: do heavy load trees have longer infestation duration?
+wilcox.test(n_years_infested ~ load_2019, data = load_duration)
+
+# Visualise
+ggplot(load_duration, aes(load_2019, n_years_infested,
+                          fill = load_2019)) +
+  geom_boxplot(alpha = 0.6) +
+  geom_jitter(width = 0.15, alpha = 0.4) +
+  labs(x = "Load category (2019)",
+       y = "Years infested (2011–2019)") +
+  theme_thesis +
+  theme(legend.position = "none")
+```
+
+
 ## A6: Summary tables for thesis appendix {#sec-appendix-tables}
 
 ```{r}
@@ -1932,22 +1766,14 @@ tbl_h1_fixed |>
 write_csv(tbl_h1_fixed, file.path(tables_dir, "H1_fixed_effects.csv"))
 
 # ── H1 slenderness ANOVA ──────────────────────────────────────────────────────
-h1_sl_tables <- make_anova_table(
-  aov_h1_slender, emm_h1_sl_df,
-  ref_level = "Never infested",
-  hypothesis = "H1 — Slenderness"
-)
+# ── H1 slenderness brms model ─────────────────────────────────────────────────
+tbl_h1_slender <- make_fixed_table(m_h1_slender, "H1 — Slenderness (height/DBH)")
 
-cat("\n===== H1 SLENDERNESS ANOVA =====\n")
-h1_sl_tables$anova |>
-  kable(caption = "H1 slenderness — one-way ANOVA (reference: Never infested)") |>
+cat("\n===== H1 SLENDERNESS (brms) =====\n")
+tbl_h1_slender |>
+  kable(caption = "H1 slenderness — brms multilevel model (reference: Never infested)") |>
   print()
-h1_sl_tables$means |>
-  kable(caption = "H1 slenderness — group means and % effects") |>
-  print()
-
-write_csv(h1_sl_tables$anova,  file.path(tables_dir, "H1_slenderness_anova.csv"))
-write_csv(h1_sl_tables$means,  file.path(tables_dir, "H1_slenderness_means.csv"))
+write_csv(tbl_h1_slender, file.path(tables_dir, "H1_slenderness_brms.csv"))
 
 # ── H1 PAI model fixed effects ───────────────────────────────────────────────
 tbl_pai_fixed <- make_fixed_table(m_pai_main, "H1 PAI — log(PAI tree only)")
@@ -1979,25 +1805,17 @@ tbl_h2_fixed |>
 write_csv(tbl_h2_fixed, file.path(tables_dir, "H2_fixed_effects.csv"))
 
 # ── H2 slenderness ANOVA ──────────────────────────────────────────────────────
-h2_sl_tables <- make_anova_table(
-  aov_h2_slender, emm_h2_sl_df,
-  ref_level = "remained uninfested",
-  hypothesis = "H2 — Slenderness"
-)
+# ── H2 slenderness brms model ─────────────────────────────────────────────────
+tbl_h2_slender <- make_fixed_table(m_h2_slender, "H2 — Slenderness (height/DBH)")
 
-cat("\n===== H2 SLENDERNESS ANOVA =====\n")
-h2_sl_tables$anova |>
-  kable(caption = "H2 slenderness — one-way ANOVA (reference: remained uninfested)") |>
+cat("\n===== H2 SLENDERNESS (brms) =====\n")
+tbl_h2_slender |>
+  kable(caption = "H2 slenderness — brms multilevel model (reference: remained uninfested)") |>
   print()
-h2_sl_tables$means |>
-  kable(caption = "H2 slenderness — group means and % effects") |>
-  print()
-
-write_csv(h2_sl_tables$anova,  file.path(tables_dir, "H2_slenderness_anova.csv"))
-write_csv(h2_sl_tables$means,  file.path(tables_dir, "H2_slenderness_means.csv"))
+write_csv(tbl_h2_slender, file.path(tables_dir, "H2_slenderness_brms.csv"))
 
 # ── H2 2011 height model fixed effects ───────────────────────────────────────
-tbl_h2_2011_fixed <- make_fixed_table(m_h2_2011_ht, "H2 height 2011 — log(height 2011)")
+tbl_h2_2011_fixed <- make_fixed_table(H2_2011_mm8, "H2 height 2011 — log(height 2011)")
 
 cat("\n===== H2 2011 HEIGHT FIXED EFFECTS =====\n")
 tbl_h2_2011_fixed |>
@@ -2039,9 +1857,9 @@ tbl_model_spec <- tribble(
   nrow(m_h1$depth$data), n_distinct(dat_h1$species),
 
   "H1", "Slenderness (height/DBH)",
-  "One-way ANOVA",
-  "H1_category", "—",
-  nrow(dat_h1_sl), n_distinct(dat_h1$species),
+  "brm LMM (Student-t)",
+  "H1_category", "(1|species) + (1|subplot)",
+  nrow(m_h1_slender$data), n_distinct(dat_h1$species),
 
   "H1", "log(Crown base height ratio)",
   "brm LMM (Student-t)",
@@ -2074,19 +1892,19 @@ tbl_model_spec <- tribble(
   nrow(m_h2_lmm$depth$data), n_distinct(dat_h2$species),
 
   "H2 TLS", "Slenderness (height/DBH)",
-  "One-way ANOVA",
-  "H2_category", "—",
-  nrow(dat_h2_sl), n_distinct(dat_h2$species),
+  "brm LMM (Student-t)",
+  "H2_category", "(1|species) + (1|subplot)",
+  nrow(m_h2_slender$data), n_distinct(dat_h2$species),
 
   "H2 TLS", "log(Crown base height ratio)",
   "brm LMM (Student-t)",
   "H2_category", "(1|species) + (1|subplot)",
   nrow(m_h2_lmm$cbh$data), n_distinct(dat_h2$species),
 
-  "H2 height", "log(Height 2011)",
-  "brm LMM (Student-t)",
-  "log(DBH 2011) + h2_2011_category", "(1|species)",
-  nrow(m_h2_2011_ht$data), n_distinct(dat_h2_2011$species)
+  "H2 height", "Height 2011 (MM8 nonlinear)",
+  "brm NLM (Gaussian) — MM8",
+  "Vm + x + K ~ h2_2011_category", "(1|species)",
+  nrow(H2_2011_mm8$data), n_distinct(dat_h2_2011$species)
 )
 
 cat("\n===== MODEL SPECIFICATION TABLE =====\n")
@@ -2100,25 +1918,21 @@ write_xlsx(
   list(
     "Sample_sizes"           = tbl_samples,
     "H1_fixed_effects"       = tbl_h1_fixed,
-    "H1_slenderness_ANOVA"   = h1_sl_tables$anova,
-    "H1_slenderness_means"   = h1_sl_tables$means,
+    "H1_slenderness_brms"    = tbl_h1_slender,
     "H1_PAI_fixed_effects"   = tbl_pai_fixed,
     "H2_fixed_effects"       = tbl_h2_fixed,
-    "H2_slenderness_ANOVA"   = h2_sl_tables$anova,
-    "H2_slenderness_means"   = h2_sl_tables$means,
+    "H2_slenderness_brms"    = tbl_h2_slender,
     "H2_2011_height"         = tbl_h2_2011_fixed,
     "H2b_OLS_pvalues"        = tbl_h2b,
-    "Model_specifications"   = tbl_model_spec,
-    "Height_model_comparison" = tbl_height_compare
+    "Model_specifications"   = tbl_model_spec
   ),
   path = file.path(tables_dir, "all_model_results.xlsx")
 )
 
 cat("\n Tables saved to:", tables_dir, "\n")
-cat("  Files: sample_sizes.csv | H1_fixed_effects.csv | H1_slenderness_anova.csv\n")
-cat("         H1_slenderness_means.csv | H1_PAI_fixed_effects.csv\n")
-cat("         H2_fixed_effects.csv | H2_slenderness_anova.csv\n")
-cat("         H2_slenderness_means.csv | H2_2011_height_fixed_effects.csv\n")
+cat("  Files: sample_sizes.csv | H1_fixed_effects.csv | H1_slenderness_brms.csv\n")
+cat("         H1_PAI_fixed_effects.csv | H2_fixed_effects.csv\n")
+cat("         H2_slenderness_brms.csv | H2_2011_height_fixed_effects.csv\n")
 cat("         H2b_OLS_pvalues.csv | model_specifications.csv\n")
 cat("         all_model_results.xlsx\n")
 ```
@@ -2130,4 +1944,6 @@ cat("         all_model_results.xlsx\n")
 #| code-fold: false
 sessionInfo()
 ```
+
+
 
