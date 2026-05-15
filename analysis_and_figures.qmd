@@ -742,6 +742,7 @@ fig_pai
 save_fig(fig_pai, "H1_PAI_all_species_main.png", width = 14, height = 12)
 ```
 
+
 ---
 
 # H2: Pre-infestation Architecture as Predictor
@@ -1034,6 +1035,59 @@ save_fig(fig_h2_2011_allom,
          14, 10)
 ```
 
+```{r}
+# ── Predicted heights at specific DBH values from H2_2011_mm8 ─────────────────
+# Addresses Sruthi and Helene's comment: interpret from predicted heights,
+# not from individual parameters (Vm, x, K) in isolation.
+
+dbh_focal <- c(25, 50, 100, 150)
+
+pred_focal <- crossing(
+  dbh_cm           = dbh_focal,
+  h2_2011_category = c("remained uninfested", "gained infestation")
+) |>
+  mutate(dbh     = dbh_cm,
+         height  = NA_real_,
+         species = NA_character_)
+
+fv_focal <- fitted(H2_2011_mm8,
+                   newdata    = pred_focal,
+                   re_formula = NA,   # population-level only
+                   summary    = TRUE)
+
+pred_focal <- pred_focal |>
+  mutate(
+    fit = exp(fv_focal[, "Estimate"]),
+    lo  = exp(fv_focal[, "Q2.5"]),
+    hi  = exp(fv_focal[, "Q97.5"])
+  )
+
+# ── Summary table ─────────────────────────────────────────────────────────────
+pred_focal |>
+  select(h2_2011_category, dbh_cm, fit, lo, hi) |>
+  mutate(across(c(fit, lo, hi), \(x) round(x, 1))) |>
+  pivot_wider(names_from  = h2_2011_category,
+              values_from = c(fit, lo, hi),
+              names_glue  = "{h2_2011_category}_{.value}") |>
+  mutate(
+    diff_m   = round(`gained infestation_fit` - `remained uninfested_fit`, 1),
+    diff_pct = round(
+      (`gained infestation_fit` - `remained uninfested_fit`) /
+        `remained uninfested_fit` * 100, 1)
+  ) |>
+  rename(
+    DBH_cm                    = dbh_cm,
+    Uninfested_fit_m          = `remained uninfested_fit`,
+    Uninfested_lo_m           = `remained uninfested_lo`,
+    Uninfested_hi_m           = `remained uninfested_hi`,
+    Gained_infestation_fit_m  = `gained infestation_fit`,
+    Gained_infestation_lo_m   = `gained infestation_lo`,
+    Gained_infestation_hi_m   = `gained infestation_hi`,
+    Diff_m                    = diff_m,
+    Diff_pct                  = diff_pct
+  ) |>
+  write_csv(file.path(tables_dir, "AppendixSx_predicted_heights_MM8.csv"))
+```
 
 
 
@@ -1567,8 +1621,6 @@ save_fig(fig_re_scatter,
 ```
 
 
-
-
 ## A5: Appendix PAI — top 12 species
 
 ```{r, warning=FALSE}
@@ -1673,6 +1725,69 @@ ggplot(load_duration, aes(load_2019, n_years_infested,
        y = "Years infested (2011–2019)") +
   theme_thesis +
   theme(legend.position = "none")
+```
+
+```{r}
+# ── Was the lost-lianas group as badly infested as persistently infested? ─────
+# Compare peak liana score (max across all recorded years) between H1 categories.
+# This addresses whether the intermediate structural profile of lost-lianas trees
+# reflects genuinely lower prior infestation intensity rather than recovery.
+
+peak_infestation <- dat_h1 |>
+  filter(H1_category %in% c("Lost lianas", "Persistently infested")) |>
+  rowwise() |>
+  mutate(
+    peak_score = max(c_across(paste0("lianas_", 2011:2019)),
+                     na.rm = TRUE),
+    mean_score = mean(c_across(paste0("lianas_", 2011:2019)),
+                      na.rm = TRUE),
+    n_years_infested = sum(
+      c_across(paste0("lianas_", 2011:2019)) > 0,
+      na.rm = TRUE)
+  ) |>
+  ungroup() |>
+  filter(is.finite(peak_score))
+
+# ── Summary table ─────────────────────────────────────────────────────────────
+peak_infestation |>
+  group_by(H1_category) |>
+  summarise(
+    n             = n(),
+    mean_peak     = round(mean(peak_score), 2),
+    median_peak   = round(median(peak_score), 2),
+    mean_duration = round(mean(n_years_infested), 2),
+    .groups = "drop"
+  ) |>
+  kable(caption = "Peak and mean liana score by H1 category")
+
+# ── Boxplot: peak score and duration side by side ─────────────────────────────
+p_peak <- ggplot(peak_infestation,
+                 aes(x = H1_category, y = peak_score, fill = H1_category)) +
+  geom_boxplot(width = 0.5, outlier.size = 0.8, alpha = 0.7) +
+  geom_jitter(width = 0.15, size = 0.8, alpha = 0.4) +
+  scale_fill_manual(values = pal_h1[c("Lost lianas", "Persistently infested")],
+                    guide = "none") +
+  scale_y_continuous(breaks = 0:4,
+                     labels = c("0\n(none)", "1\n(1–25%)", "2\n(26–50%)",
+                                "3\n(51–75%)", "4\n(76–100%)")) +
+  labs(x = NULL,
+       y = "Peak liana score (0–4 scale)",
+       title = "Peak infestation intensity") +
+  theme_thesis
+
+p_duration <- ggplot(peak_infestation,
+                     aes(x = H1_category, y = n_years_infested,
+                         fill = H1_category)) +
+  geom_boxplot(width = 0.5, outlier.size = 0.8, alpha = 0.7) +
+  geom_jitter(width = 0.15, size = 0.8, alpha = 0.4) +
+  scale_fill_manual(values = pal_h1[c("Lost lianas", "Persistently infested")],
+                    guide = "none") +
+  labs(x = NULL,
+       y = "Years infested (2011–2019)",
+       title = "Infestation duration") +
+  theme_thesis
+
+cowplot::plot_grid(p_peak, p_duration, ncol = 2, align = "h")
 ```
 
 
