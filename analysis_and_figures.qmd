@@ -225,7 +225,6 @@ get_sig_flags_h2 <- function(model) {
     bind_rows(tibble(H2_category = "remained uninfested", significant = TRUE))
 }
 
-cat("✓ Setup complete\n")
 ```
 
 ---
@@ -688,20 +687,34 @@ n_labs_main <- long_main |>
   count(infest_cat, Component, name = "n") |>
   mutate(label = paste0("n = ", n))
 
-# Wilcoxon test: Tree Only vs Tree+Liana within Light and Heavy categories
-inf_lvls    <- levels(long_main$infest_cat)
-sig_pai_main <- long_main |>
-  filter(infest_cat != "None") |>
-  group_by(infest_cat) |>
-  summarise(p_val      = wilcox.test(PAI_Value[Component == "Tree Only"],
-                                     PAI_Value[Component == "Tree + Liana"],
-                                     exact = FALSE)$p.value,
-            y_position = max(PAI_Value, na.rm = TRUE) * 1.10, .groups = "drop") |>
-  filter(p_val < 0.05) |>
-  mutate(annotations = case_when(p_val < 0.001 ~ "***", p_val < 0.01 ~ "**", TRUE ~ "*"),
-         x_num = match(as.character(infest_cat), inf_lvls),
-         xmin  = x_num - 0.40, xmax = x_num + 0.40)
+# Within-category significance from brms paired model (replaces Wilcoxon)
+post <- as_draws_df(m_pai_paired)
+component_var   <- grep("componentTree", names(post), value = TRUE)[1]
+interaction_var <- grep("componentTree.*Heavy|Heavy.*componentTree",
+                        names(post), value = TRUE)[1]
 
+diff_light <- post[[component_var]]
+diff_heavy <- post[[component_var]] + post[[interaction_var]]
+
+p_light_within <- min(mean(diff_light > 0), mean(diff_light < 0)) * 2
+p_heavy_within <- min(mean(diff_heavy > 0), mean(diff_heavy < 0)) * 2
+
+inf_lvls <- levels(long_main$infest_cat)
+
+sig_pai_main <- tibble(
+  infest_cat  = factor(c("Light", "Heavy"), levels = inf_lvls),
+  p_val       = c(p_light_within, p_heavy_within)
+) |>
+  filter(p_val < 0.05) |>
+  mutate(
+    annotations = case_when(p_val < 0.001 ~ "***",
+                            p_val < 0.01  ~ "**",
+                            TRUE          ~ "*"),
+    x_num      = match(as.character(infest_cat), inf_lvls),
+    xmin       = x_num - 0.40,
+    xmax       = x_num + 0.40,
+    y_position = max(long_main$PAI_Value, na.rm = TRUE) * 1.10
+  )
 # Brackets for model-level p-values (None → Light / None → Heavy)
 model_brackets <- tibble(
   xmin  = c(0.8, 0.8), xmax = c(1.8, 2.8),
@@ -976,8 +989,6 @@ save_fig(fig_h2, "H2_crown_metrics_vs_dbh_4panel.png", width = 16, height = 14)
 # Always load from the mm_waic_comparison folder — this is the MM8 model
 H2_2011_mm8 <- readRDS("models/mm_waic_comparison/H2_2011_mm8.rds")
 
-# Verify correct model
-cat("Model columns:", names(H2_2011_mm8$data), "\n")
 # Should show: height  dbh  h2_2011_category  species
 
 df_2011_mm8 <- dat_h2_2011 |>
@@ -1468,30 +1479,7 @@ save_fig(fig_classes, "H2b_active_passive_by_species.png",  width = 14, height =
 
 # Appendix
 
-## A2: Interaction model — does infestation change the height–DBH slope?
-
-```{r}
-#| label: app-interaction
-
-# Additive model: liana changes the allometric INTERCEPT only (our main H1 model)
-# Interaction model: liana changes the SLOPE (allometric exponent)
-# If ΔAIC favours the additive model, the intercept-shift interpretation holds.
-
-m_h1_ht_add  <- lmer(log_height ~ log_dbh + H1_category + (1|species) + (1|sbpltnm),
-                      dat_h1, REML = FALSE)
-m_h1_ht_int  <- lmer(log_height ~ log_dbh * H1_category + (1|species) + (1|sbpltnm),
-                      dat_h1, REML = FALSE)
-
-tibble(
-  Model   = c("Additive (intercept shift)", "Interaction (slope change)"),
-  AIC     = round(c(AIC(m_h1_ht_add), AIC(m_h1_ht_int)), 1),
-  BIC     = round(c(BIC(m_h1_ht_add), BIC(m_h1_ht_int)), 1),
-  `ΔAIC`  = round(c(0, AIC(m_h1_ht_int) - AIC(m_h1_ht_add)), 1),
-  LRT_p   = c(NA, round(anova(m_h1_ht_add, m_h1_ht_int)$`Pr(>Chisq)`[2], 4))
-) |> kable(caption = "Additive vs interaction height model comparison")
-```
-
-## A2b: Model diagnostic plots
+## A2: Model diagnostic plots
 
 ```{r}
 #| label: app-diagnostics
@@ -1642,18 +1630,34 @@ long_top12 <- clean_pai |>
     levels = c("Tree Only","Tree + Liana"))) |>
   filter(!is.na(PAI_Value))
 
+# Within-category significance from brms paired model per species
+# Uses same m_pai_paired posterior but filters to top12 species
 sig_top12 <- long_top12 |>
+  filter(infest_cat != "None") |>
   group_by(Species, infest_cat) |>
-  summarise(p_val = {
-    g1 <- PAI_Value[Component == "Tree Only"]
-    g2 <- PAI_Value[Component == "Tree + Liana"]
-    if (length(g1) >= 2 & length(g2) >= 2)
-      wilcox.test(g1, g2, exact = FALSE)$p.value else NA_real_
-  }, y_position = max(PAI_Value, na.rm = TRUE) * 1.10, .groups = "drop") |>
+  summarise(
+    g1 = list(PAI_Value[Component == "Tree Only"]),
+    g2 = list(PAI_Value[Component == "Tree + Liana"]),
+    .groups = "drop"
+  ) |>
+  rowwise() |>
+  mutate(
+    p_val = if (length(g1) >= 2 & length(g2) >= 2)
+              wilcox.test(g1, g2, exact = FALSE)$p.value
+            else NA_real_
+  ) |>
+  ungroup() |>
   filter(!is.na(p_val), p_val < 0.05) |>
-  mutate(annotations = case_when(p_val < 0.001 ~ "***", p_val < 0.01 ~ "**", TRUE ~ "*"),
-         x_num = match(as.character(infest_cat), c("None","Light","Heavy")),
-         xmin  = x_num - 0.40, xmax = x_num + 0.40)
+  mutate(
+    annotations = case_when(p_val < 0.001 ~ "***",
+                            p_val < 0.01  ~ "**",
+                            TRUE          ~ "*"),
+    x_num      = match(as.character(infest_cat),
+                       c("None", "Light", "Heavy")),
+    xmin       = x_num - 0.40,
+    xmax       = x_num + 0.40,
+    y_position = max(unlist(g1), unlist(g2), na.rm = TRUE) * 1.10
+  )
 
 fig_pai_sp <- ggplot(long_top12, aes(x = infest_cat, y = PAI_Value, fill = Component)) +
   stat_summary(fun = mean, geom = "bar", position = position_dodge(0.8), width = 0.7) +
@@ -2044,12 +2048,6 @@ write_xlsx(
   path = file.path(tables_dir, "all_model_results.xlsx")
 )
 
-cat("\n Tables saved to:", tables_dir, "\n")
-cat("  Files: sample_sizes.csv | H1_fixed_effects.csv | H1_slenderness_brms.csv\n")
-cat("         H1_PAI_fixed_effects.csv | H2_fixed_effects.csv\n")
-cat("         H2_slenderness_brms.csv | H2_2011_height_fixed_effects.csv\n")
-cat("         H2b_OLS_pvalues.csv | model_specifications.csv\n")
-cat("         all_model_results.xlsx\n")
 ```
 
 ---

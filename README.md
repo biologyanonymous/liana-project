@@ -1,161 +1,113 @@
-# BCI Liana × Tree Architecture — Analysis Dataframes
+# Tree Architecture × Liana Infestation — Analysis Code and Data
 
-**Project:** Tree Architectural Feedbacks with Liana Canopy Infestation  
-
-These six CSVs are the final, analysis-ready datasets for the BCI thesis project. They are produced by `save_final_dfs.R` (run once after `final_figures_v13.R`) and are read directly by `bci_liana_architecture.qmd`. No raw-data joining or cleaning is needed in the analysis script.
-
----
-
-## Files
-
-### `dat_h1.csv` — H1 structural legacies dataset
-**n = 251 trees | 67 species | 24 subplots**
-
-Trees from the BCI 50-ha plot with TLS crown metrics (2019) and infestation histories reconstructed from annual dendrometer records (2011–2019). Filtered to three mutually exclusive infestation-history categories; recently infested and uncertain trees excluded.
-
-| Column | Description |
-|--------|-------------|
-| `tag6` | 6-digit ForestGEO stem tag |
-| `species` | Species name (factor) |
-| `sbpltnm` | 40×40 m subplot ID (factor) |
-| `H1_category` | `Never infested` / `Lost lianas` / `Persistently infested` |
-| `dbh_2019` | DBH in mm (raw dendrometer measurement) |
-| `dbh_cm` | DBH in cm (`dbh_2019 / 10`) |
-| `height` | Total tree height in m (TLS 2019) |
-| `crown_depth` | Crown depth in m (TLS) |
-| `pa` | Crown projected area in m² (TLS) |
-| `crown_vol` | Crown volume in m³ (TLS) |
-| `crown_base_h` | Height of crown base above ground (`height − crown_depth`) |
-| `slenderness` | Slenderness index (`height / dbh_cm`) |
-| `cbh_ratio` | Crown base height ratio (`crown_base_h / height`) |
-| `log_dbh` | `log(dbh_cm)` |
-| `log_height` | `log(height)` |
-| `log_depth` | `log(crown_depth)` |
-| `log_area` | `log(pa)` |
-| `log_vol` | `log(crown_vol)` |
-| `log_slender` | `log(slenderness)` |
-| `log_cbh` | `log(max(cbh_ratio, 0.001))` — floor prevents log(0) |
-
-**Used by:** H1 Bayesian LMMs (brms), slenderness/CBH violin plots, 4-panel allometric figure, species RE scatter plot.
+**Project:** Tree Architectural Feedbacks in Response to Liana Canopy Infestation  
+**Study site:** 50-ha Forest Dynamics Plot, Barro Colorado Island, Panama  
+**Code DOI:** *(Zenodo DOI will appear here after deposit)*
 
 ---
 
-### `clean_pai.csv` — H1 plant area index dataset
-**n = 575 trees | 91 species | 24 subplots**
+## Repository structure
 
-Voxel-based plant area index (PAI) estimated from TLS point clouds. Liana material extracted using alpha-shape envelopes; PAI calculated separately for host-tree points and combined host+liana points. Joined with subplot IDs from the dendrometer records.
-
-| Column | Description |
-|--------|-------------|
-| `tag` | Tree tag (numeric) |
-| `Species` | Species name (factor) |
-| `sbpltnm` | Subplot ID (factor) |
-| `DBH` | DBH in mm |
-| `dbh_cm` | DBH in cm |
-| `log_dbh` | `log(dbh_cm)` |
-| `Lianas` | Liana cover score (0–100%) from 2019 field survey |
-| `infest_cat` | Liana load category: `None` / `Light` (1–50%) / `Heavy` (51–100%) |
-| `infest_bin` | Binary: `None` / `Infested` |
-| `PAI_tree_only` | Host PAI (TLS, tree points only) |
-| `PAI_combined` | Combined PAI (tree + liana points) |
-
-**Used by:** H1 PAI Bayesian LMM (brms), all PAI bar charts including top-12 species appendix figure.
-
----
-
-### `dat_h2.csv` — H2 pre-infestation predictor dataset
-**n = 181 trees | 61 species | 24 subplots**
-
-Subset of trees uninfested in 2019, classified by whether they subsequently gained liana infestation by 2025 (`gained infestation`) or remained uninfested (`remained uninfested`). Crown metrics are TLS 2019 measurements — i.e. the baseline architecture *before* the outcome is determined. Column structure is identical to `dat_h1.csv` plus `H2_category`.
-
-| Column | Description |
-|--------|-------------|
-| `H2_category` | `remained uninfested` / `gained infestation` |
-| *(all others)* | Same as `dat_h1.csv` |
-
-**Used by:** H2 Bayesian LMMs (brms), H2 4-panel figure, H2 height-by-species violin plot.
-
----
-
-### `dat_mode.csv` — H2b climbing mode × crown architecture dataset
-
-Fieldwork data collected in 2025 for the 6 most abundant focal species (≥10 individuals per species), joined with TLS crown metrics. One row per tree. Dominant climbing mode and class already summarised from potentially multiple observed modes per tree.
-
-| Column | Description |
-|--------|-------------|
-| `tag6` | 6-digit ForestGEO stem tag |
-| `species` | Species name (factor) |
-| `infestation_type` | `Direct` / `Lateral` / `Both` (how lianas entered the crown) |
-| `dominant_mode` | Most common climbing mode observed on that tree |
-| `dominant_class` | `Active` (twining/tendrils/prehensile) or `Passive` (scrambling/hooks/adhesive) |
-| `crown_depth`, `pa`, `crown_vol`, `height` | TLS crown metrics (m, m², m³, m) |
-| `dbh_cm`, `log_dbh` | Size covariate |
-| `log_depth`, `log_area`, `log_vol`, `log_height` | Log-transformed metrics for OLS models |
-
-`dat_mode_ap` is derived from this file in the analysis script by filtering to rows where `dominant_class` is not NA.
-
-**Used by:** H2b OLS models (lm), Active vs Passive crown architecture boxplots.
-
----
-
-### `pathway_dat.csv` — infestation pathway × H2 outcome dataset
-
-Fieldwork records with infestation pathway type joined with H2 infestation outcome. Used for the chi-square test of whether pathway type (Direct/Lateral/Both) is associated with whether a tree subsequently gains or retains infestation.
-
-| Column | Description |
-|--------|-------------|
-| `tag6` | 6-digit ForestGEO stem tag |
-| `H2_category` | Infestation outcome (factor: `gained infestation` / `remained uninfested`) |
-| `infestation_type` | `Direct` / `Lateral` / `Both` |
-| `inf_type_bin` | Binary: `Lateral` vs `Non-lateral` |
-| `lateral` | Integer (0/1): whether liana entry was lateral |
-
-**Used by:** §7 chi-square test, infestation-type-by-species proportional bar chart.
-
----
-
-### `modes_clean.csv` — climbing mode records for species bar charts
-
-Long-format fieldwork records: one row per tree × observed liana climbing mode (a tree with multiple liana species can appear multiple times). Used for the species-level proportional bar charts of climbing mode and class.
-
-| Column | Description |
-|--------|-------------|
-| `tag6` | 6-digit ForestGEO stem tag |
-| `species` | Species name |
-| `mode` | Climbing mode (e.g. `twining`, `scrambling`, `hooks`, `tendrils`) |
-| `infestation_type` | `Direct` / `Lateral` / `Both` |
-| `climb_class` | `Active` or `Passive` (derived from `mode`) |
-
-**Used by:** §8.3 climbing mode and class proportional bar charts (top 6 focal species only).
+```
+mbiol-project/
+├── data/                        ← analysis-ready CSV files (see below)
+├── models/                      ← pre-fitted brms .rds files
+├── figures/                     ← output figures (generated on render)
+├── tables/                      ← output tables (generated on render)
+├── analysis_and_figures.qmd     ← main analysis and figures
+├── data_processing.qmd          ← data cleaning and processing pipeline
+├── mm_waic_comparison.R         ← Michaelis–Menten vs log-log WAIC comparison
+└── README.md                    ← this file
+```
 
 ---
 
 ## Reproducing the analysis
 
-```
-~/mbiol-project/
-├── data/
-│   ├── dat_h1.csv
-│   ├── clean_pai.csv
-│   ├── dat_h2.csv
-│   ├── dat_h2_2011.csv
-│   ├── dat_mode.csv
-│   ├── pathway_dat.csv
-│   └── modes_clean.csv
-├── models/               ← pre-fitted brms .rds files (load instantly; delete to refit)
-│   ├── m_h1.rds
-│   ├── m_h2_lmm.rds
-│   └── m_pai_main.rds
-├── figures/
-├── tables/
-├── bci_liana_architecture.qmd   ← main analysis document
-├── save_final_dfs.R             ← script that produced these files
-└── README.md                    ← this file
-```
+Open `analysis_and_figures.qmd` in RStudio and click **Render**. All figures are written to `figures/` and tables to `tables/` automatically. Pre-fitted Bayesian models are stored as `.rds` files in `models/` and loaded directly; delete any `.rds` file and re-render to refit from scratch.
 
-Open `bci_liana_architecture.qmd` in RStudio and click **Render**. All figures are written to `figures/` and tables to `tables/` automatically.
+`data_processing.qmd` documents the upstream processing steps (field data cleaning, infestation-history classification, TLS-to-stem-map matching, crown metric extraction, PAI estimation). It is set to `eval: false` as the upstream inputs (raw TLS point clouds, dendrometer `.rdata` timeseries) are large files not included in this repository. Raw data are available on reasonable request.
 
-To refit a Bayesian model from scratch, delete the corresponding `.rds` file from `models/` and re-render.
+### R version and key packages
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| R | 4.5.2 | — |
+| brms | ≥ 2.21 | Bayesian multilevel models |
+| tidyverse | ≥ 2.0 | Data wrangling and plotting |
+| ggplot2 | ≥ 3.5 | Figures |
+| knitr / kableExtra | — | Tables |
+| writexl | — | Excel output |
+
+---
+
+## Data files
+
+### `dat_h1.csv` — H1 structural legacies
+**n = 251 trees | 67 species | 24 subplots**
+
+TLS crown metrics (2019) merged with infestation histories reconstructed from annual dendrometer records (2011–2019). Trees assigned to one of three mutually exclusive infestation-history categories.
+
+| Column | Description |
+|--------|-------------|
+| `tag6` | 6-digit ForestGEO stem tag |
+| `species` | Species code |
+| `sbpltnm` | 40 × 40 m subplot ID |
+| `H1_category` | `Never infested` / `Lost lianas` / `Persistently infested` |
+| `dbh_cm` | Diameter at breast height (cm) |
+| `height` | Tree height (m; TLS 2019) |
+| `crown_depth` | Crown depth (m) |
+| `pa` | Projected crown area (m²) |
+| `crown_vol` | Crown volume (m³) |
+| `slenderness` | Height / DBH |
+| `cbh_ratio` | Crown base height / total height |
+| `log_dbh`, `log_height`, `log_depth`, `log_area`, `log_vol` | Log-transformed metrics |
+
+---
+
+### `clean_pai.csv` — H1 plant area index
+**n = 575 trees | 91 species | 24 subplots**
+
+Voxel-based PAI estimated separately for host-tree points and combined host + liana points.
+
+| Column | Description |
+|--------|-------------|
+| `tag` | Tree tag |
+| `Species` | Species code |
+| `sbpltnm` | Subplot ID |
+| `dbh_cm` | DBH (cm) |
+| `infest_cat` | `None` / `Light` (1–50%) / `Heavy` (51–100%) |
+| `PAI_tree_only` | Host-only PAI (m² m⁻²) |
+| `PAI_combined` | Combined host + liana PAI (m² m⁻²) |
+
+---
+
+### `dat_h2.csv` — H2 colonisation predictors (TLS)
+**n = 181 trees | 61 species | 24 subplots**
+
+Trees uninfested in 2019, classified by whether they gained liana infestation by 2025. Crown metrics are TLS 2019 measurements (pre-outcome baseline). Column structure identical to `dat_h1.csv` plus `H2_category` (`remained uninfested` / `gained infestation`).
+
+---
+
+### `dat_h2_2011.csv` — H2 colonisation predictors (2011 heights)
+**n = 414 trees | 85 species**
+
+Trees uninfested in 2011, classified by whether they gained liana infestation by 2019. Ground-measured heights from 2011 laser rangefinder surveys.
+
+---
+
+### `dat_mode.csv` — climbing mode × crown architecture
+Fieldwork data (2025) joined with TLS crown metrics. One row per tree. Includes dominant climbing mode and active/passive climbing class.
+
+---
+
+### `pathway_dat.csv` — infestation pathway × colonisation outcome
+Infestation pathway type (Direct / Lateral / Both) joined with H2 outcome. Used for chi-square test.
+
+---
+
+### `modes_clean.csv` — climbing mode records (long format)
+One row per tree × observed liana climbing mode. Used for species-level proportional bar charts.
 
 ---
 
@@ -163,8 +115,15 @@ To refit a Bayesian model from scratch, delete the corresponding `.rds` file fro
 
 | Source | Description |
 |--------|-------------|
-| TLS 2019 | Point clouds acquired across 24 BCI 50-ha plot subplots; processed with ITSMe (Terryn et al., 2023) and RayCloudTools (Lowe & Stepanas, 2021) |
-| Dendrometer records 2011–2025 | Annual liana infestation scores (0–4 scale) from BCI mortality survey subplots (Ramos et al., 2022; Schnitzer et al., 2021) |
-| Fieldwork 2025 | Climbing mode and infestation pathway recorded for 6 focal species (≥10 individuals each) |
+| TLS 2019 | Point clouds from 24 BCI 50-ha plot subplots; processed with RayCloudTools (Lowe & Stepanas, 2021) and ITSMe (Terryn et al., 2023) |
+| Dendrometer records 2011–2025 | Annual liana infestation scores from BCI mortality survey subplots (Ramos et al., 2022; Schnitzer et al., 2021) |
+| Fieldwork 2025 | Climbing mode and infestation pathway recorded in the field |
 
-Raw data and processing scripts are held separately and are available on request.
+The code used to select the 33 TLS subplot locations is available at:  
+https://github.com/PanamaForestGEO/TLSchoiceBCI
+
+The following data are not included in this repository but are available upon reasonable request:
+
+- 581 individually segmented tree point clouds, each labelled with ForestGEO tag number and species identity
+- Individual subplot-level TLS point clouds (co-registered)
+- Other raw data used in this analysis 

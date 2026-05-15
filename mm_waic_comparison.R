@@ -1,7 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # Michaelis-Menten vs log-log WAIC comparison — exploratory script
 # Runs for: H1 height, H2 TLS height (2019), H2 ground height (2011)
-# Fits mm_form2–8 (Sruthi's formulations) + existing log-log model
 #
 # Category predictors match main analysis exactly:
 #   H1:      H1_category (factor; reference = Never infested)
